@@ -215,8 +215,6 @@ func (c *Client) Connect() error {
 
 	ci := make(map[string]interface{})
 	ci["client_id"] = fmt.Sprintf("%d", c.ID)
-	ci["short_id"] = c.ShortIdentifier
-	ci["long_id"] = c.LongIdentifier
 	ci["heartbeat_interval"] = int64(c.HeartbeatInterval / time.Millisecond)
 	ci["feature_negotiation"] = true
 	cmd, err := Identify(ci)

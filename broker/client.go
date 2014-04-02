@@ -19,6 +19,7 @@ const DefaultBufferSize = 16 * 1024
 
 type identifyDataV2 struct {
 	ClientID            string `json:"client_id"`
+	Role                string `json:"role"`
 	Hostname            string `json:"hostname"`
 	HeartbeatInterval   int    `json:"heartbeat_interval"`
 	OutputBufferSize    int    `json:"output_buffer_size"`
@@ -34,11 +35,19 @@ type identifyDataV2 struct {
 }
 
 type client struct {
+	// ReadyCount     int64
+	// LastReadyCount int64
+	// InFlightCount  int64
+	// MessageCount   uint64
+	// FinishCount    uint64
+	// RequeueCount   uint64
+
 	sync.RWMutex
 
 	ID        int64
 	context   *context
 	UserAgent string
+	Role      string
 
 	// original connection
 	net.Conn
@@ -133,6 +142,7 @@ func (c *client) Identify(data identifyDataV2) error {
 	c.ClientID = clientId
 	c.Hostname = hostname
 	c.UserAgent = data.UserAgent
+	c.Role = data.Role
 	c.Unlock()
 
 	err := c.SetHeartbeatInterval(data.HeartbeatInterval)
@@ -174,6 +184,38 @@ func (c *client) Identify(data identifyDataV2) error {
 	// }
 
 	return nil
+}
+
+func (c *client) Stats() ClientStats {
+	c.RLock()
+	// TODO: deprecated, remove in 1.0
+	name := c.ClientID
+
+	clientId := c.ClientID
+	hostname := c.Hostname
+	userAgent := c.UserAgent
+	c.RUnlock()
+	return ClientStats{
+		// TODO: deprecated, remove in 1.0
+		Name: name,
+
+		Version:       "V2",
+		RemoteAddress: c.RemoteAddr().String(),
+		ClientID:      clientId,
+		Hostname:      hostname,
+		UserAgent:     userAgent,
+		State:         atomic.LoadInt32(&c.State),
+		// ReadyCount:    atomic.LoadInt64(&c.ReadyCount),
+		// InFlightCount: atomic.LoadInt64(&c.InFlightCount),
+		// MessageCount:  atomic.LoadUint64(&c.MessageCount),
+		// FinishCount:   atomic.LoadUint64(&c.FinishCount),
+		// RequeueCount: atomic.LoadUint64(&c.RequeueCount),
+		ConnectTime: c.ConnectTime.Unix(),
+		SampleRate:  atomic.LoadInt32(&c.SampleRate),
+		TLS:         atomic.LoadInt32(&c.TLS) == 1,
+		Deflate:     atomic.LoadInt32(&c.Deflate) == 1,
+		Snappy:      atomic.LoadInt32(&c.Snappy) == 1,
+	}
 }
 
 func (c *client) SetHeartbeatInterval(desiredInterval int) error {

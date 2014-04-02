@@ -110,7 +110,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	log.Printf("INFO: device %#v", device)
+	log.Printf("INFO: exist_device %#v", device)
 	if device == nil {
 		device = &model.Device{
 			ID:              <-s.context.api.idChan,

@@ -17,8 +17,8 @@ type Broker struct {
 	sync.RWMutex
 	options *brokerOptions
 
-	//map is clientId : Client instance
-	clients map[string]*client //TODO change to client
+	//map is clientId_channeId : Client instance
+	clients map[string]*client
 
 	tcpAddr      *net.TCPAddr
 	httpAddr     *net.TCPAddr
@@ -70,9 +70,7 @@ func NewBroker(options *brokerOptions) *Broker {
 		tlsConfig: tlsConfig,
 	}
 
-	// b.waitGroup.Wrap(func() { n.idPump() })
 	return b
-
 }
 
 func (b *Broker) Main() {
@@ -108,7 +106,6 @@ func (b *Broker) Exit() {
 	if b.tcpListener != nil {
 		b.tcpListener.Close()
 	}
-
 	if b.httpListener != nil {
 		b.httpListener.Close()
 	}
