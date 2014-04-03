@@ -492,7 +492,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		CreatedAt:  time.Now().UnixNano(),
 		UpdatedAt:  time.Now().UnixNano(),
 	}
-	err = model.SaveSubscribe(sub)
+	err = model.SaveOrUpdateSubscribe(sub)
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
@@ -682,7 +682,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 		Body:      body,
 		Timestamp: time.Now().UnixNano(),
 	}
-	log.Printf("msg is %s", msg)
+	log.Printf("msg is %#v", msg)
 	// dstClient.SendingMessage()
 	err = p.SendMessage(dstClient, msg, &buf)
 	if err != nil {
