@@ -12,7 +12,7 @@ func main() {
 	fmt.Println("client start!")
 
 	addr := "localhost:8600"
-	client_id := int64(185980656)
+	client_id := int64(451294706224070657)
 	c := client.NewClient(addr, client_id)
 	c.Connect()
 

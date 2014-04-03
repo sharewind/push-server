@@ -44,7 +44,6 @@ type client struct {
 
 	sync.RWMutex
 
-	ID        int64
 	context   *context
 	UserAgent string
 	Role      string
@@ -70,11 +69,13 @@ type client struct {
 	State       int32
 	ConnectTime time.Time
 	// Channel        *Channel
+	// incomingMsgChan chan *Message // TODO need process message send error, message unsend on closing
 	ReadyStateChan chan int
 	ExitChan       chan int
 
-	ClientID string
-	Hostname string
+	ClientID   string
+	Hostname   string
+	SubChannel string
 
 	SampleRate int32
 
@@ -90,14 +91,13 @@ type client struct {
 	lenSlice []byte
 }
 
-func newClient(id int64, conn net.Conn, context *context) *client {
+func newClient(conn net.Conn, context *context) *client {
 	var identifier string
 	if conn != nil {
 		identifier, _, _ = net.SplitHostPort(conn.RemoteAddr().String())
 	}
 
 	c := &client{
-		ID:      id,
 		context: context,
 
 		Conn: conn,
@@ -124,7 +124,7 @@ func newClient(id int64, conn net.Conn, context *context) *client {
 		// IdentifyEventChan: make(chan identifyEvent, 1),
 
 		// heartbeats are client configurable but default to 30s
-		HeartbeatInterval: context.broker.options.ClientTimeout * 100000 / 2,
+		HeartbeatInterval: context.broker.options.ClientTimeout / 2,
 	}
 	c.lenSlice = c.lenBuf[:]
 	return c
@@ -218,6 +218,13 @@ func (c *client) Stats() ClientStats {
 	}
 }
 
+func (c *client) StartClose() {
+	// Force the client into ready 0
+	// c.SetReadyCount(0)
+	// mark this client as closing
+	atomic.StoreInt32(&c.State, StateClosing)
+}
+
 func (c *client) SetHeartbeatInterval(desiredInterval int) error {
 	c.Lock()
 	defer c.Unlock()
@@ -227,8 +234,8 @@ func (c *client) SetHeartbeatInterval(desiredInterval int) error {
 		c.HeartbeatInterval = 0
 	case desiredInterval == 0:
 		// do nothing (use default)
-	case desiredInterval >= 1000 &&
-		desiredInterval <= int(c.context.broker.options.MaxHeartbeatInterval/time.Millisecond):
+	case desiredInterval > 1000:
+		// && desiredInterval <= int(c.context.broker.options.MaxHeartbeatInterval/time.Millisecond):
 		c.HeartbeatInterval = time.Duration(desiredInterval) * time.Millisecond
 	default:
 		return errors.New(fmt.Sprintf("heartbeat interval (%d) is invalid", desiredInterval))

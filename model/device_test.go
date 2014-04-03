@@ -1,8 +1,8 @@
 package model
 
 import (
-	"fmt"
-	"log"
+	// "fmt"
+	// "log"
 	"testing"
 	"time"
 
@@ -28,9 +28,7 @@ func TestFindDeviceIDBySerialNO(t *testing.T) {
 	serialNO := "SOHUTEST20140401"
 	deviceID, err := model.FindDeviceIDBySerialNO(serialNO)
 	if err != nil {
-		log.Printf("error %s", err)
+		T.Logf("error %s", err)
 	}
-	log.Printf("%s", deviceID)
-	fmt.Printf("%s", deviceID)
-
+	T.Logf("%s", deviceID)
 }

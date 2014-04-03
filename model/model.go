@@ -6,6 +6,7 @@ const (
 )
 
 const (
+	ALLDevice    = 0
 	Browser      = 1
 	PC           = 2
 	Android      = 3

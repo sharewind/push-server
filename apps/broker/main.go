@@ -7,6 +7,8 @@ import (
 	"syscall"
 )
 
+//sh /opt/scripts/mongodb/mongodb.sh start
+//sh /opt/scripts/redis/redis.sh start
 func main() {
 	// flagSet.Parse(os.Args[1:])
 

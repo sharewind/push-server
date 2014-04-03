@@ -217,6 +217,7 @@ func (c *Client) Connect() error {
 	ci["client_id"] = fmt.Sprintf("%d", c.ID)
 	ci["heartbeat_interval"] = int64(c.HeartbeatInterval / time.Millisecond)
 	ci["feature_negotiation"] = true
+	ci["role"] = "client"
 	cmd, err := Identify(ci)
 	if err != nil {
 		log.Printf("ERROR: [%s] failed to create IDENTIFY command - %s", c, err)
@@ -366,8 +367,7 @@ func (c *Client) readLoop() {
 			msg, err := broker.DecodeMessage(data)
 			// msg.cmdChan = c.cmdChan
 			// msg.responseChan = c.finishedMessages
-
-			log.Printf("msg receive %s", msg)
+			log.Printf("INFO: [%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
 			if err != nil {
 				// handleError(q, c, fmt.Sprintf("[%s] error (%s) decoding message %s",
 				// 	c, err.Error(), data))

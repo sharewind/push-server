@@ -6,15 +6,16 @@ import (
 )
 
 type Message struct {
-	ID        int64  `json:"id" bson:"_id"`
-	Body      string `json"body" bson:"body"`
-	CreatedAt int64  `json:"created_at" bson:"created_at"`
-	CreatedBy int8   `json:"created_by" bson:"created_by"`
-	CreatorID int64  `json:"creator_id" bson:"creator_id"`
-	Expires   int64  `json:"expires" bson:"expires"`
-	PushType  int8   `json:"push_type" bson:"push_type"`
-	ChannelID int64  `json:"channel_id" bson:"channel_id"`
-	DeviceID  int64  `json:"device_id" bson:"device_id"`
+	ID         int64  `json:"id" bson:"_id"`
+	Body       string `json"body" bson:"body"`
+	CreatedAt  int64  `json:"created_at" bson:"created_at"`
+	CreatedBy  int8   `json:"created_by" bson:"created_by"`
+	CreatorID  int64  `json:"creator_id" bson:"creator_id"`
+	Expires    int64  `json:"expires" bson:"expires"`
+	DeviceType int8   `json:"device_type" bson:"device_type"`
+	PushType   int8   `json:"push_type" bson:"push_type"`
+	ChannelID  int64  `json:"channel_id" bson:"channel_id"`
+	DeviceID   int64  `json:"device_id" bson:"device_id"`
 }
 
 func FindMessageByID(ID int64) (result *Message, err error) {

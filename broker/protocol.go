@@ -10,12 +10,14 @@ import (
 	"math"
 	"strconv"
 	// "math/rand"
-	"code.sohuno.com/kzapp/push-server/util"
 	"net"
 	"sync/atomic"
 	"time"
 	// "unsafe"
 	// "github.com/bitly/go-nsq"
+
+	"code.sohuno.com/kzapp/push-server/model"
+	"code.sohuno.com/kzapp/push-server/util"
 )
 
 const maxTimeout = time.Hour
@@ -33,8 +35,8 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 	var line []byte
 	var zeroTime time.Time
 
-	clientID := int64(0) //atomic.AddInt64(&p.context.broker.clientIDSequence, 1)
-	client := newClient(clientID, conn, p.context)
+	// clientID := atomic.AddInt64(&p.context.broker.clientIDSequence, 1)
+	client := newClient(conn, p.context)
 
 	// synchronize the startup of messagePump in order
 	// to guarantee that it gets a chance to initialize
@@ -47,9 +49,9 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 	// <-messagePumpStartedChan
 
 	for {
-		log.Printf("INFO: client.HeartbeatInterval %d ", client.HeartbeatInterval)
+		log.Printf("INFO: client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
 		if client.HeartbeatInterval > 0 {
-			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 1000000 * 2))
+			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2))
 		} else {
 			client.SetReadDeadline(zeroTime)
 		}
@@ -103,13 +105,18 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 	}
 
 	log.Printf("PROTOCOL(V2): [%s] exiting ioloop", client)
-	conn.Close()
+	p.cleanupClientConn(client)
+	return err
+}
+
+func (p *protocol) cleanupClientConn(client *client) {
+	client.Close()
+	model.DelClientConn(client.ClientID)
+	p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
 	close(client.ExitChan)
 	// if client.Channel != nil {
 	// 	client.Channel.RemoveClient(client.ID)
 	// }
-
-	return err
 }
 
 func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
@@ -370,7 +377,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	resp, err := json.Marshal(struct {
-		MaxRdyCount     int64  `json:"max_rdy_count"`
+		// MaxRdyCount     int64  `json:"max_rdy_count"`
 		Version         string `json:"version"`
 		MaxMsgTimeout   int64  `json:"max_msg_timeout"`
 		MsgTimeout      int64  `json:"msg_timeout"`
@@ -457,20 +464,49 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "SUB insufficient number of parameters")
 	}
 
-	channel_id := string(params[1])
+	//TODO FIXME
+	str_channel_id := string(params[1])
+	channel_id, err := strconv.ParseInt(str_channel_id, 10, 64) //TODO need validate channel_id
+	if err != nil {
+		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
+	}
+	client_id, err := strconv.ParseInt(client.ClientID, 10, 64)
+	if err != nil {
+		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
+	}
 
-	// if !util.IsValidTopicName(topicName) {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_TOPIC",
-	// 		fmt.Sprintf("SUB topic name '%s' is not valid", topicName))
-	// }
+	channel, err := model.FindChannelByID(channel_id)
+	if err != nil || channel == nil {
+		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
+	}
+	device, err := model.FindDeviceByID(client_id)
+	if err != nil || device == nil {
+		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
+	}
 
-	// if !util.IsValidChannelName(channelName) {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_CHANNEL",
-	// 		fmt.Sprintf("SUB channel name '%s' is not valid", channelName))
-	// }
-	//valid channelId by reids
-	p.context.broker.AddClient(client.ClientID, channel_id, client)
-	log.Printf("clientId %d sub channel %s success ", client.ClientID, channel_id)
+	//TODO send subscribe event
+	sub := &model.Subscribe{
+		ChannelID:  channel_id,
+		DeviceID:   client_id,
+		DeviceType: device.DeviceType,
+		CreatedAt:  time.Now().UnixNano(),
+		UpdatedAt:  time.Now().UnixNano(),
+	}
+	err = model.SaveSubscribe(sub)
+	if err != nil {
+		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
+	}
+
+	p.context.broker.AddClient(client.ClientID, str_channel_id, client)
+	log.Printf("INFO: clientId %d sub channel %s success ", client.ClientID, channel_id)
+
+	// should send client connected eventsf
+	log.Printf("INFO: SetClientConn clientID=%s, broker_addr=%s", client.ClientID, client.LocalAddr().String())
+	err = model.SetClientConn(client.ClientID, client.LocalAddr().String())
+	if err != nil {
+		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
+	}
+
 	// increase channel sub count
 	// add client to channel sub list
 
@@ -478,7 +514,8 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	// channel := topic.GetChannel(channelName)
 	// channel.AddClient(client.ID, client)
 
-	// atomic.StoreInt32(&client.State, StateSubscribed)
+	atomic.StoreInt32(&client.State, StateSubscribed)
+	client.SubChannel = str_channel_id
 	// client.Channel = channel
 	// update message pump
 	// client.SubEventChan <- channel
@@ -524,15 +561,6 @@ func (p *protocol) RDY(client *client, params [][]byte) ([]byte, error) {
 // hearbeat
 func (p *protocol) HT(client *client, params [][]byte) ([]byte, error) {
 	log.Printf("[%s] heartbeat received", client)
-
-	// var buf *bytes.Buffer
-	// msg := &Message{
-	// 	Id:        util.Guid(int64(11111)).Hex(),
-	// 	Body:      []byte("body is nullllll"),
-	// 	Timestamp: time.Now().UnixNano(),
-	// }
-	// p.SendMessage(client, msg, buf)
-
 	return []byte("HT"), nil
 }
 
@@ -597,8 +625,7 @@ func (p *protocol) CLS(client *client, params [][]byte) ([]byte, error) {
 	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CLS in current state")
 	// }
 
-	// client.StartClose()
-
+	client.StartClose()
 	return []byte("CLOSE_WAIT"), nil
 }
 
@@ -609,6 +636,9 @@ func (p *protocol) NOP(client *client, params [][]byte) ([]byte, error) {
 func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	// var err error
 	var buf bytes.Buffer
+	if client.Role != "$_@push_sign_$_kz_worker" {
+		return nil, util.NewFatalClientErr(nil, "E_INVALID_REQUEST", "client can't pub message")
+	}
 
 	if len(params) < 3 {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")

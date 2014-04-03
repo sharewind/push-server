@@ -20,8 +20,8 @@ func main() {
 	httpAddr := "localhost:8710"
 	w := worker.NewWorker(httpAddr)
 	w.Main()
-	w.ConnectToBroker("localhost:8600")
+	w.ConnectToBroker("127.0.0.1:8600")
 
 	<-exitChan
-
+	w.Stop()
 }

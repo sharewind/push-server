@@ -30,36 +30,20 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		fallthrough
 	case "/put":
 		s.putHandler(w, req)
-	// case "/mpub":
-	// fallthrough
-	// case "/mput":
-	// s.mputHandler(w, req)
+	case "/create_channel":
+		// do nothing
+	case "/update_channel":
+		// do nothing
+	case "/delete_channel":
+		// do nothing
+	case "/get_channel/":
+		// do nothing
 	// case "/stats":
 	// s.statsHandler(w, req)
 	case "/ping":
 		s.pingHandler(w, req)
 	case "/info":
 		s.infoHandler(w, req)
-	// case "/empty_topic":
-	// 	s.emptyTopicHandler(w, req)
-	// case "/delete_topic":
-	// 	s.deleteTopicHandler(w, req)
-	// case "/pause_topic":
-	// 	s.pauseTopicHandler(w, req)
-	// case "/unpause_topic":
-	// 	s.pauseTopicHandler(w, req)
-	// case "/empty_channel":
-	// 	s.emptyChannelHandler(w, req)
-	// case "/delete_channel":
-	// 	s.deleteChannelHandler(w, req)
-	// case "/pause_channel":
-	// 	s.pauseChannelHandler(w, req)
-	// case "/unpause_channel":
-	// 	s.pauseChannelHandler(w, req)
-	// case "/create_topic":
-	// 	s.createTopicHandler(w, req)
-	// case "/create_channel":
-	// 	s.createChannelHandler(w, req)
 	case "/debug/pprof":
 		httpprof.Index(w, req)
 	case "/debug/pprof/cmdline":
@@ -119,6 +103,7 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 // 	util.ApiResponse(w, 200, "OK", nil)
 // }
 
+//curl -d "hi sucess " http://localhost:8710/put?channel_id=1001&device_type=0
 func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != "POST" {
 		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
@@ -160,14 +145,40 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	channel_id, _ := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
-	// device_type = strconv.ParseInt(reqParams["device_type"], 10 , 32)
+	channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
+	if err != nil {
+		log.Printf("ERROR: failed to parse channel_id params - %s", err.Error())
+		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
+		return
+	}
+
+	// push_type, err := strconv.ParseInt(reqParams.Get("push_type"), 10, 8)
+	// if err != nil {
+	// 	log.Printf("ERROR: failed to parse push_type params - %s", err.Error())
+	// 	util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
+	// 	return
+	// }
+
+	device_type, err := strconv.ParseInt(reqParams.Get("device_type"), 10, 8)
+	if err != nil {
+		log.Printf("ERROR: failed to parse device_type params - %s", err.Error())
+		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
+		return
+	}
 
 	msg := &model.Message{
 		ID:        <-s.context.worker.idChan,
 		ChannelID: channel_id,
 		CreatedAt: time.Now().UnixNano(),
 		Body:      string(body),
+		// PushType:   int8(push_type),
+		DeviceType: int8(device_type),
+	}
+	err = model.SaveMessage(msg)
+	if err != nil {
+		log.Printf("ERROR: failed to SaveMessage %#v ,err=%s", msg, err.Error())
+		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
+		return
 	}
 
 	err = s.context.worker.PutMessage(msg)

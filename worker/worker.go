@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"bufio"
+	// "bufio"
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
@@ -89,10 +89,9 @@ type Worker struct {
 	idChan          chan int64
 	messageCount    uint64
 	incomingMsgChan chan *model.Message
-	// idChan     chan nsq.MessageID
-	notifyChan chan interface{}
-	exitChan   chan int
-	waitGroup  util.WaitGroupWrapper
+	exitChan        chan int
+	waitGroup       util.WaitGroupWrapper
+	// notifyChan      chan interface{}
 }
 
 // returned when a publish command is made against a Writer that is not connected
@@ -136,7 +135,7 @@ func NewWorker(HTTPAddress string) *Worker {
 
 		ReadTimeout:       client.DefaultClientTimeout,
 		WriteTimeout:      time.Second,
-		HeartbeatInterval: time.Second / 2,
+		HeartbeatInterval: 30 * time.Second,
 
 		DeflateLevel: 6,
 
@@ -206,32 +205,52 @@ func (w *Worker) PutMessage(msg *model.Message) error {
 // }
 
 func (w *Worker) Publish() {
+	var buf bytes.Buffer
 
 	for {
 		select {
 		case message := <-w.incomingMsgChan:
 			// save message on mongodb
-			channel_id := message.ChannelID
 			// devices_ids := querySubscibeDevices(channel_id)
-			devices_ids := []int64{int64(185980656)}
-			for _, device_id := range devices_ids {
-				log.Printf("prepare send message channel_id %d device_id %d  body %s", channel_id, device_id, message.Body)
+			skip := 0
+			limit := -1
+			subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
+			if err != nil {
+				log.Printf("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
+				continue
+			}
+
+			for _, sub := range subs {
+				log.Printf("prepare send message channel_id %d device_id %d  body %s", message.ChannelID, sub.DeviceID, message.Body)
 				// broker_id,err := getBrokerForDevice(device_id)
 				// if err != nil || broker_id == nil{
 				// 	saveOfflineMessage(device_id, message_id)
 				// }
 
-				broker_addr := "localhost:8600"
-				conn := w.nsqConnections[broker_addr]
-				log.Printf(" publish conn is %s", conn)
-				cmd := client.Publish(device_id, int64(1001), message.ID, []byte(message.Body))
-
-				var buf bytes.Buffer
-				err := conn.sendCommand(&buf, cmd)
+				broker_addr, err := model.GetClientConn(fmt.Sprintf("%d", sub.DeviceID))
 				if err != nil {
-					log.Printf("error occuar on send Command")
+					log.Printf("ERROR: GetClientConn by redis  [%s]  err %s ", sub.DeviceID, err)
+					//TODO save offline message
+					continue
+				}
+
+				// broker_addr := "localhost:8600"
+				conn, ok := w.nsqConnections[broker_addr]
+				log.Printf(" publish conn is %s", conn)
+				if !ok {
+					log.Printf("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
+					//TODO save offline message
+					continue
+				}
+
+				cmd := client.Publish(sub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
+				err = conn.sendCommand(&buf, cmd)
+				if err != nil {
+					log.Printf("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
 					// saveOfflineMessage
 					// increase failure count
+					w.stopBrokerConn(conn)
+					continue
 				}
 				log.Printf(" send message success = %s", message.Body)
 			}
@@ -280,13 +299,9 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	log.Printf("connect to broker %s", addr)
 
 	var buf bytes.Buffer
-	// if atomic.LoadInt32(&q.stopFlag) == 1 {
-	// 	return errors.New("reader stopped")
-	// }
-
-	// if atomic.LoadInt32(&q.runningHandlers) == 0 {
-	// 	return errors.New("no handlers")
-	// }
+	if atomic.LoadInt32(&q.stopFlag) == 1 {
+		return errors.New("worker stopped")
+	}
 
 	q.RLock()
 	_, ok := q.nsqConnections[addr]
@@ -328,6 +343,7 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	ci["feature_negotiation"] = true
 	ci["sample_rate"] = q.SampleRate
 	ci["user_agent"] = userAgent
+	ci["role"] = "$_@push_sign_$_kz_worker"
 	cmd, err := client.Identify(ci)
 	if err != nil {
 		cleanupConnection()
@@ -396,14 +412,6 @@ func (q *Worker) ConnectToBroker(addr string) error {
 		// 	}
 		// }
 	}
-
-	// cmd = Subscribe(q.TopicName, q.ChannelName)
-	// err = connection.sendCommand(&buf, cmd)
-	// if err != nil {
-	// 	cleanupConnection()
-	// 	return fmt.Errorf("[%s] failed to subscribe to %s:%s - %s", connection, q.TopicName, q.ChannelName, err.Error())
-	// }
-
 	connection.enableReadBuffering()
 
 	q.Lock()
@@ -427,76 +435,84 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	return nil
 }
 
-// func handleError(q *Reader, c *nsqConn, errMsg string) {
-// 	log.Printf(errMsg)
-// 	atomic.StoreInt32(&c.stopFlag, 1)
+func handleError(q *Worker, c *nsqConn, errMsg string) {
+	log.Printf(errMsg)
+	atomic.StoreInt32(&c.stopFlag, 1)
 
-// 	q.RLock()
-// 	numLookupd := len(q.lookupdHTTPAddrs)
-// 	q.RUnlock()
-// 	if numLookupd == 0 {
-// 		go func(addr string) {
-// 			for {
-// 				log.Printf("[%s] re-connecting in 15 seconds...", addr)
-// 				time.Sleep(15 * time.Second)
-// 				if atomic.LoadInt32(&q.stopFlag) == 1 {
-// 					break
-// 				}
-// 				err := q.ConnectToNSQ(addr)
-// 				if err != nil && err != ErrAlreadyConnected {
-// 					log.Printf("ERROR: failed to connect to %s - %s",
-// 						addr, err.Error())
-// 					continue
-// 				}
-// 				break
-// 			}
-// 		}(c.RemoteAddr().String())
-// 	}
-// }
+	// q.RLock()
+	// numLookupd := len(q.lookupdHTTPAddrs)
+	// q.RUnlock()
+	// if numLookupd == 0 {
+	go func(addr string) {
+		for {
+			log.Printf("[%s] re-connecting in 15 seconds...", addr)
+			time.Sleep(15 * time.Second)
+			if atomic.LoadInt32(&q.stopFlag) == 1 {
+				break
+			}
+			err := q.ConnectToBroker(addr)
+			if err != nil && err != ErrAlreadyConnected {
+				log.Printf("ERROR: failed to connect to %s - %s",
+					addr, err.Error())
+				continue
+			}
+			break
+		}
+	}(c.RemoteAddr().String())
+	// }
+}
 
-func (c *Worker) messagePump(conn *nsqConn) {
+func (w *Worker) messagePump(c *nsqConn) {
 	var err error
 	var buf bytes.Buffer
 
-	heartbeatTicker := time.NewTicker(c.HeartbeatInterval)
+	heartbeatTicker := time.NewTicker(w.HeartbeatInterval)
 	heartbeatChan := heartbeatTicker.C
 
 	for {
+		if atomic.LoadInt32(&c.stopFlag) == 1 || atomic.LoadInt32(&w.stopFlag) == 1 {
+			goto exit
+		}
+
 		select {
+		case <-c.exitChan:
+			log.Printf("[%s] breaking out of message pump loop", c)
+			// Indicate drainReady because we will not pull any more off finishedMessages
+			// close(c.drainReady)
+			goto exit
 		case <-heartbeatChan:
 			cmd := client.HeartBeat()
-			err = conn.sendCommand(&buf, cmd)
+			err = c.sendCommand(&buf, cmd)
 			if err != nil {
-				log.Printf("ERROR: [%s] failed to write HeartBeat - %s", c, err)
-				goto exit
+				log.Printf("ERROR: [%s] failed to writing heartbeat - %s", c, err)
+				w.stopBrokerConn(c)
+				continue
 			}
 			// shoud receive response
 			// conn.SetReadDeadline(time.Now().Add(c.HeartbeatInterval * 2))
-		case <-c.exitChan:
+		case <-w.exitChan:
 			goto exit
 		}
 	}
 
 exit:
-	log.Printf("client: [%s] exiting messagePump", c)
+	log.Printf("broker: [%s] exiting messagePump", c)
 	heartbeatTicker.Stop()
 	if err != nil {
-		log.Printf("client: [%s] messagePump error - %s", c, err.Error())
+		log.Printf("broker: [%s] messagePump error - %s", c, err.Error())
 	}
 }
 
-func (c *Worker) readLoop(conn *nsqConn) {
-	rbuf := bufio.NewReader(conn)
+func (w *Worker) readLoop(c *nsqConn) {
 	for {
-		// if atomic.LoadInt32(&c.stopFlag) == 1 {
-		// 	goto exit
-		// }
+		if atomic.LoadInt32(&c.stopFlag) == 1 || atomic.LoadInt32(&c.stopFlag) == 1 {
+			goto exit
+		}
 
-		resp, err := client.ReadResponse(rbuf)
-		frameType, data, err := client.UnpackResponse(resp)
-
+		//TODO FIXME should listen on exist, need wait for timeout
+		frameType, data, err := c.readUnpackedResponse()
 		if err != nil {
-			//handleError(q, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
+			handleError(w, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
 			continue
 		}
 
@@ -507,11 +523,10 @@ func (c *Worker) readLoop(conn *nsqConn) {
 			// msg.responseChan = c.finishedMessages
 
 			if err != nil {
-				// handleError(q, c, fmt.Sprintf("[%s] error (%s) decoding message %s",
-				// 	c, err.Error(), data))
+				handleError(w, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
 				continue
 			}
-			log.Printf("msg receive %s", msg)
+			log.Printf("INFO: [%s] FrameTypeMessage receive  %s - %s", c, msg.Id, msg.Body)
 
 			// remain := atomic.AddInt64(&c.rdyCount, -1)
 			// atomic.AddInt64(&q.totalRdyCount, -1)
@@ -538,13 +553,13 @@ func (c *Worker) readLoop(conn *nsqConn) {
 				atomic.StoreInt32(&c.stopFlag, 1)
 			case bytes.Equal(data, []byte("HT")):
 				// var buf bytes.Buffer
-				log.Printf("[%s] heartbeat received", conn)
 				// err := c.sendCommand(&buf, Nop())
 				// if err != nil {
 				// 	handleError(q, c, fmt.Sprintf("[%s] error sending NOP - %s",
 				// 		c, err.Error()))
 				// 	goto exit
 				// }
+				log.Printf("[%s] heartbeat received", c)
 			}
 		case client.FrameTypeError:
 			log.Printf("[%s] error from nsqd %s", c, data)
@@ -553,39 +568,67 @@ func (c *Worker) readLoop(conn *nsqConn) {
 		}
 	}
 
-	// exit:
-	// c.wg.Done()
+exit:
+	c.wg.Done()
 	log.Printf("[%s] readLoop exiting", c)
 }
 
+func (q *Worker) stopBrokerConn(c *nsqConn) {
+	c.stopper.Do(func() {
+		log.Printf("[%s] beginning stopFinishLoop", c)
+		close(c.exitChan)
+		c.Close()
+		go q.cleanupConnection(c)
+	})
+}
+
+func (q *Worker) cleanupConnection(c *nsqConn) {
+
+	// this blocks until finishLoop and readLoop have exited
+	c.wg.Wait()
+
+	q.Lock()
+	delete(q.nsqConnections, c.String())
+	left := len(q.nsqConnections)
+	q.Unlock()
+
+	log.Printf("there are %d connections left alive", left)
+}
+
 // Stop will gracefully stop the Reader
-// func (q *Worker) Stop() {
-// 	var buf bytes.Buffer
+func (q *Worker) Stop() {
+	var buf bytes.Buffer
+	if !atomic.CompareAndSwapInt32(&q.stopFlag, 0, 1) {
+		return
+	}
 
-// 	if !atomic.CompareAndSwapInt32(&q.stopFlag, 0, 1) {
-// 		return
-// 	}
+	log.Printf("stopping worker")
+	if q.httpListener != nil {
+		q.httpListener.Close()
+	}
 
-// 	log.Printf("stopping reader")
+	//TODO 此处需要持久化尚未发送的消息队列 incomingMsgChan 到数据库
 
-// 	q.RLock()
-// 	l := len(q.nsqConnections)
-// 	q.RUnlock()
+	q.RLock()
+	left := len(q.nsqConnections)
+	q.RUnlock()
 
-// 	if l == 0 {
-// 		q.stopHandlers()
-// 	} else {
-// 		q.RLock()
-// 		for _, c := range q.nsqConnections {
-// 			err := c.sendCommand(&buf, StartClose())
-// 			if err != nil {
-// 				log.Printf("[%s] failed to start close - %s", c, err.Error())
-// 			}
-// 		}
-// 		q.RUnlock()
+	if left > 0 {
+		q.RLock()
+		for _, c := range q.nsqConnections {
+			err := c.sendCommand(&buf, client.StartClose())
+			if err != nil {
+				log.Printf("[%s] failed to start close - %s", c, err.Error())
+			}
+		}
+		q.RUnlock()
 
-// 		time.AfterFunc(time.Second*30, func() {
-// 			q.stopHandlers()
-// 		})
-// 	}
-// }
+		// TODO 是否等到所有的消息收到ACT
+		// time.AfterFunc(time.Second*30, func() {
+		// 	q.stopHandlers()
+		// })
+	}
+
+	close(q.exitChan)
+	q.waitGroup.Wait()
+}
