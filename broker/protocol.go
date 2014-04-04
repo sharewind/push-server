@@ -166,18 +166,18 @@ func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
 		return p.HT(client, params)
 	case bytes.Equal(params[0], []byte("FIN")):
 		return p.FIN(client, params)
-	case bytes.Equal(params[0], []byte("RDY")):
-		return p.RDY(client, params)
-	case bytes.Equal(params[0], []byte("REQ")):
-		return p.REQ(client, params)
+	// case bytes.Equal(params[0], []byte("RDY")):
+	// 	return p.RDY(client, params)
+	// case bytes.Equal(params[0], []byte("REQ")):
+	// 	return p.REQ(client, params)
 	case bytes.Equal(params[0], []byte("PUB")):
 		return p.PUB(client, params)
-	case bytes.Equal(params[0], []byte("MPUB")):
-		return p.MPUB(client, params)
+	// case bytes.Equal(params[0], []byte("MPUB")):
+	// 	return p.MPUB(client, params)
 	case bytes.Equal(params[0], []byte("NOP")):
 		return p.NOP(client, params)
-	case bytes.Equal(params[0], []byte("TOUCH")):
-		return p.TOUCH(client, params)
+	// case bytes.Equal(params[0], []byte("TOUCH")):
+	// 	return p.TOUCH(client, params)
 	case bytes.Equal(params[0], []byte("IDENTIFY")):
 		return p.IDENTIFY(client, params)
 	case bytes.Equal(params[0], []byte("SUB")):
@@ -187,135 +187,6 @@ func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
 	}
 	return nil, util.NewFatalClientErr(nil, "E_INVALID", fmt.Sprintf("invalid command %s", params[0]))
 }
-
-/**
-func (p *protocol) messagePump(client *client, startedChan chan bool) {
-	var err error
-	var buf bytes.Buffer
-	var clientMsgChan chan *Message
-	// var subChannel *Channel
-	// NOTE: `flusherChan` is used to bound message latency for
-	// the pathological case of a channel on a low volume topic
-	// with >1 clients having >1 RDY counts
-	var flusherChan <-chan time.Time
-	var sampleRate int32
-
-	// subEventChan := client.SubEventChan
-	identifyEventChan := client.IdentifyEventChan
-	outputBufferTicker := time.NewTicker(client.OutputBufferTimeout)
-	heartbeatTicker := time.NewTicker(client.HeartbeatInterval)
-	heartbeatChan := heartbeatTicker.C
-	msgTimeout := client.MsgTimeout
-
-	// v2 opportunistically buffers data to clients to reduce write system calls
-	// we force flush in two cases:
-	//    1. when the client is not ready to receive messages
-	//    2. we're buffered and the channel has nothing left to send us
-	//       (ie. we would block in this loop anyway)
-	//
-	flushed := true
-
-	// signal to the goroutine that started the messagePump
-	// that we've started up
-	close(startedChan)
-
-	for {
-		if subChannel == nil || !client.IsReadyForMessages() {
-			// the client is not ready to receive messages...
-			clientMsgChan = nil
-			flusherChan = nil
-			// force flush
-			client.Lock()
-			err = client.Flush()
-			client.Unlock()
-			if err != nil {
-				goto exit
-			}
-			flushed = true
-		} else if flushed {
-			// last iteration we flushed...
-			// do not select on the flusher ticker channel
-			clientMsgChan = subChannel.clientMsgChan
-			flusherChan = nil
-		} else {
-			// we're buffered (if there isn't any more data we should flush)...
-			// select on the flusher ticker channel, too
-			clientMsgChan = subChannel.clientMsgChan
-			flusherChan = outputBufferTicker.C
-		}
-
-		select {
-		case <-flusherChan:
-			// if this case wins, we're either starved
-			// or we won the race between other channels...
-			// in either case, force flush
-			client.Lock()
-			err = client.Flush()
-			client.Unlock()
-			if err != nil {
-				goto exit
-			}
-			flushed = true
-		case <-client.ReadyStateChan:
-		case subChannel = <-subEventChan:
-			// you can't SUB anymore
-			subEventChan = nil
-		case identifyData := <-identifyEventChan:
-			// you can't IDENTIFY anymore
-			identifyEventChan = nil
-
-			outputBufferTicker.Stop()
-			if identifyData.OutputBufferTimeout > 0 {
-				outputBufferTicker = time.NewTicker(identifyData.OutputBufferTimeout)
-			}
-
-			heartbeatTicker.Stop()
-			heartbeatChan = nil
-			if identifyData.HeartbeatInterval > 0 {
-				heartbeatTicker = time.NewTicker(identifyData.HeartbeatInterval)
-				heartbeatChan = heartbeatTicker.C
-			}
-
-			if identifyData.SampleRate > 0 {
-				sampleRate = identifyData.SampleRate
-			}
-
-			msgTimeout = identifyData.MsgTimeout
-		case <-heartbeatChan:
-			err = p.Send(client, nsq.FrameTypeResponse, heartbeatBytes)
-			if err != nil {
-				goto exit
-			}
-		case msg, ok := <-clientMsgChan:
-			if !ok {
-				goto exit
-			}
-
-			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
-				continue
-			}
-
-			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
-			client.SendingMessage()
-			err = p.SendMessage(client, msg, &buf)
-			if err != nil {
-				goto exit
-			}
-			flushed = false
-		case <-client.ExitChan:
-			goto exit
-		}
-	}
-
-exit:
-	log.Printf("PROTOCOL(V2): [%s] exiting messagePump", client)
-	heartbeatTicker.Stop()
-	outputBufferTicker.Stop()
-	if err != nil {
-		log.Printf("PROTOCOL(V2): [%s] messagePump error - %s", client, err.Error())
-	}
-}
-**/
 
 func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	var err error
@@ -516,6 +387,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 
 	atomic.StoreInt32(&client.State, StateSubscribed)
 	client.SubChannel = str_channel_id
+	go p.checkOfflineMessage(client)
 	// client.Channel = channel
 	// update message pump
 	// client.SubEventChan <- channel
@@ -523,39 +395,53 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	return okBytes, nil
 }
 
-func (p *protocol) RDY(client *client, params [][]byte) ([]byte, error) {
-	// state := atomic.LoadInt32(&client.State)
+func (p *protocol) checkOfflineMessage(client *client) {
+	var buf bytes.Buffer
 
-	// if state == StateClosing {
-	// 	// just ignore ready changes on a closing channel
-	// 	log.Printf("PROTOCOL(V2): [%s] ignoring RDY after CLS in state ClientStateV2Closing", client)
-	// 	return nil, nil
-	// }
+	messageIDs, err := model.GetOfflineMessages(client.ClientID)
+	if err != nil || messageIDs == nil {
+		log.Printf("ERROR: GetOfflineMessages clientID %s error %s ", client.ClientID, err)
+		return
+	}
 
-	// if state != StateSubscribed {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot RDY in current state")
-	// }
+	subChannel, _ := strconv.ParseInt(client.SubChannel, 10, 64)
+	for _, messageID := range messageIDs {
+		msg, err := model.FindMessageByID(messageID)
+		if err != nil || msg == nil {
+			log.Printf("ERROR: client %s message ID %d message doesn't exist, err %s", client.ClientID, messageID, err)
+			continue
+		}
 
-	// count := int64(1)
-	// if len(params) > 1 {
-	// 	b10, err := util.ByteToBase10(params[1])
-	// 	if err != nil {
-	// 		return nil, util.NewFatalClientErr(err, "E_INVALID",
-	// 			fmt.Sprintf("RDY could not parse count %s", params[1]))
-	// 	}
-	// 	count = int64(b10)
-	// }
+		// live := msg.CreatedAt + msg.Expires*100000000000000
+		// if time.Now().UnixNano() > live {
+		// 	log.Printf("ERROR: client %s message ID %d message expired.", client.ClientID, messageID)
+		// 	model.RemoveOfflineMessage(client.ClientID, messageID)
+		// 	continue
+		// }
 
-	// if count < 0 || count > p.context.broker.options.MaxRdyCount {
-	// 	// this needs to be a fatal error otherwise clients would have
-	// 	// inconsistent state
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID",
-	// 		fmt.Sprintf("RDY count %d out of range 0-%d", count, p.context.broker.options.MaxRdyCount))
-	// }
+		if subChannel != msg.ChannelID {
+			continue
+		}
 
-	// client.SetReadyCount(count)
+		msg2 := &Message{
+			Id:        util.Guid(msg.ID).Hex(),
+			Body:      []byte(msg.Body),
+			Timestamp: msg.CreatedAt,
+		}
+		log.Printf("msg is %#v", msg2)
+		err = p.SendMessage(client, msg2, &buf)
+		if err != nil {
+			log.Printf("send message to client %s error  %s", client, err)
+		}
 
-	return nil, nil
+		client.Lock()
+		err = client.Flush()
+		client.Unlock()
+
+		log.Printf("send message %#v to client %s success ", msg, client)
+		model.RemoveOfflineMessage(client.ClientID, messageID)
+
+	}
 }
 
 // hearbeat
@@ -582,40 +468,6 @@ func (p *protocol) FIN(client *client, params [][]byte) ([]byte, error) {
 	// }
 
 	// client.FinishedMessage()
-
-	return nil, nil
-}
-
-func (p *protocol) REQ(client *client, params [][]byte) ([]byte, error) {
-	state := atomic.LoadInt32(&client.State)
-	if state != StateSubscribed && state != StateClosing {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot REQ in current state")
-	}
-
-	if len(params) < 3 {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "REQ insufficient number of params")
-	}
-
-	// id := *(*MessageID)(unsafe.Pointer(&params[1][0]))
-	// timeoutMs, err := util.ByteToBase10(params[2])
-	// if err != nil {
-	// 	return nil, util.NewFatalClientErr(err, "E_INVALID",
-	// 		fmt.Sprintf("REQ could not parse timeout %s", params[2]))
-	// }
-	// timeoutDuration := time.Duration(timeoutMs) * time.Millisecond
-
-	// if timeoutDuration < 0 || timeoutDuration > maxTimeout {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID",
-	// 		fmt.Sprintf("REQ timeout %d out of range 0-%d", timeoutDuration, maxTimeout))
-	// }
-
-	// err = client.Channel.RequeueMessage(client.ID, id, timeoutDuration)
-	// if err != nil {
-	// 	return nil, util.NewClientErr(err, "E_REQ_FAILED",
-	// 		fmt.Sprintf("REQ %s failed %s", id, err.Error()))
-	// }
-
-	// client.RequeuedMessage()
 
 	return nil, nil
 }
@@ -664,10 +516,13 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	client_id := string(params[1])
 	channel_id := string(params[2])
 	message_id := string(params[3])
+	msgId, _ := strconv.ParseInt(message_id, 10, 64)
+	log.Printf("msgId ==  %d", msgId)
 
 	// TODO 另外启动一个channel 与 goroutine 用来处理这个消息
 	dstClient, err := p.context.broker.GetClient(client_id, channel_id)
 	if err != nil || dstClient == nil {
+		model.SaveOfflineMessage(dstClient.ClientID, msgId)
 		log.Printf("client %s is null", client_id)
 		return okBytes, nil
 		//return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")
@@ -675,8 +530,6 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	log.Printf("get client %s by channel %s = %s  ", client_id, channel_id, dstClient)
 
-	msgId, _ := strconv.ParseInt(message_id, 10, 64)
-	log.Printf("msgId ==  %d", msgId)
 	msg := &Message{
 		Id:        util.Guid(msgId).Hex(),
 		Body:      body,
@@ -693,107 +546,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	err = dstClient.Flush()
 	dstClient.Unlock()
 
-	// topicName := string(params[1])
-	// if !nsq.IsValidTopicName(topicName) {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_TOPIC",
-	// 		fmt.Sprintf("PUB topic name '%s' is not valid", topicName))
-	// }
-
-	// bodyLen, err := readLen(client.Reader, client.lenSlice)
-	// if err != nil {
-	// 	return nil, util.NewFatalClientErr(err, "E_BAD_MESSAGE", "PUB failed to read message body size")
-	// }
-
-	// if bodyLen <= 0 {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_MESSAGE",
-	// 		fmt.Sprintf("PUB invalid message body size %d", bodyLen))
-	// }
-
-	// if int64(bodyLen) > p.context.broker.options.MaxMsgSize {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_MESSAGE",
-	// 		fmt.Sprintf("PUB message too big %d > %d", bodyLen, p.context.broker.options.MaxMsgSize))
-	// }
-
-	// messageBody := make([]byte, bodyLen)
-	// _, err = io.ReadFull(client.Reader, messageBody)
-	// if err != nil {
-	// 	return nil, util.NewFatalClientErr(err, "E_BAD_MESSAGE", "PUB failed to read message body")
-	// }
-
-	// topic := p.context.broker.GetTopic(topicName)
-	// msg := nsq.NewMessage(<-p.context.broker.idChan, messageBody)
-	// err = topic.PutMessage(msg)
-	// if err != nil {
-	// 	return nil, util.NewFatalClientErr(err, "E_PUB_FAILED", "PUB failed "+err.Error())
-	// }
-
 	return okBytes, nil
-}
-
-func (p *protocol) MPUB(client *client, params [][]byte) ([]byte, error) {
-	// var err error
-
-	// if len(params) < 2 {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "MPUB insufficient number of parameters")
-	// }
-
-	// topicName := string(params[1])
-	// if !nsq.IsValidTopicName(topicName) {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_TOPIC",
-	// 		fmt.Sprintf("E_BAD_TOPIC MPUB topic name '%s' is not valid", topicName))
-	// }
-
-	// bodyLen, err := readLen(client.Reader, client.lenSlice)
-	// if err != nil {
-	// 	return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "MPUB failed to read body size")
-	// }
-
-	// if bodyLen <= 0 {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_BODY",
-	// 		fmt.Sprintf("MPUB invalid body size %d", bodyLen))
-	// }
-
-	// if int64(bodyLen) > p.context.broker.options.MaxBodySize {
-	// 	return nil, util.NewFatalClientErr(nil, "E_BAD_BODY",
-	// 		fmt.Sprintf("MPUB body too big %d > %d", bodyLen, p.context.broker.options.MaxBodySize))
-	// }
-
-	// messages, err := readMPUB(client.Reader, client.lenSlice, p.context.broker.idChan,
-	// 	p.context.broker.options.MaxMsgSize)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// topic := p.context.broker.GetTopic(topicName)
-
-	// // if we've made it this far we've validated all the input,
-	// // the only possible error is that the topic is exiting during
-	// // this next call (and no messages will be queued in that case)
-	// err = topic.PutMessages(messages)
-	// if err != nil {
-	// 	return nil, util.NewFatalClientErr(err, "E_MPUB_FAILED", "MPUB failed "+err.Error())
-	// }
-
-	return okBytes, nil
-}
-
-func (p *protocol) TOUCH(client *client, params [][]byte) ([]byte, error) {
-	// state := atomic.LoadInt32(&client.State)
-	// if state != nsq.StateSubscribed && state != nsq.StateClosing {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot TOUCH in current state")
-	// }
-
-	// if len(params) < 2 {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "TOUCH insufficient number of params")
-	// }
-
-	// id := *(*nsq.MessageID)(unsafe.Pointer(&params[1][0]))
-	// err := client.Channel.TouchMessage(client.ID, id)
-	// if err != nil {
-	// 	return nil, util.NewClientErr(err, "E_TOUCH_FAILED",
-	// 		fmt.Sprintf("TOUCH %s failed %s", id, err.Error()))
-	// }
-
-	return nil, nil
 }
 
 func readLen(r io.Reader, tmp []byte) (int32, error) {

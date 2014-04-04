@@ -205,55 +205,10 @@ func (w *Worker) PutMessage(msg *model.Message) error {
 // }
 
 func (w *Worker) Publish() {
-	var buf bytes.Buffer
-
 	for {
 		select {
 		case message := <-w.incomingMsgChan:
-			// save message on mongodb
-			// devices_ids := querySubscibeDevices(channel_id)
-			skip := 0
-			limit := -1
-			subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
-			if err != nil {
-				log.Printf("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
-				continue
-			}
-
-			for _, sub := range subs {
-				log.Printf("prepare send message channel_id %d device_id %d  body %s", message.ChannelID, sub.DeviceID, message.Body)
-				// broker_id,err := getBrokerForDevice(device_id)
-				// if err != nil || broker_id == nil{
-				// 	saveOfflineMessage(device_id, message_id)
-				// }
-
-				broker_addr, err := model.GetClientConn(fmt.Sprintf("%d", sub.DeviceID))
-				if err != nil {
-					log.Printf("ERROR: GetClientConn by redis  [%s]  err %s ", sub.DeviceID, err)
-					//TODO save offline message
-					continue
-				}
-
-				// broker_addr := "localhost:8600"
-				conn, ok := w.nsqConnections[broker_addr]
-				log.Printf(" publish conn is %s", conn)
-				if !ok {
-					log.Printf("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
-					//TODO save offline message
-					continue
-				}
-
-				cmd := client.Publish(sub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
-				err = conn.sendCommand(&buf, cmd)
-				if err != nil {
-					log.Printf("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
-					// saveOfflineMessage
-					// increase failure count
-					w.stopBrokerConn(conn)
-					continue
-				}
-				log.Printf(" send message success = %s", message.Body)
-			}
+			go w.pushMessage(message)
 		case <-w.exitChan:
 			goto exit
 
@@ -261,6 +216,67 @@ func (w *Worker) Publish() {
 	}
 exit:
 	log.Printf("publish msg exit!")
+}
+
+func (w *Worker) pushMessage(message *model.Message) {
+	// save message on mongodb
+	// devices_ids := querySubscibeDevices(channel_id)
+	skip := 0
+	limit := -1
+	subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
+	if err != nil {
+		log.Printf("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
+		return
+	}
+
+	for _, sub := range subs {
+		err := w.sendMessage2Client(&sub, message)
+		if err != nil {
+			log.Printf("INFO saveOfflineMessage clientID %s messageID %s", sub.DeviceID, message.ID)
+			model.SaveOfflineMessage(fmt.Sprintf("%d", sub.DeviceID), message.ID)
+		}
+	}
+}
+
+func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message) (err error) {
+	var buf bytes.Buffer
+	log.Printf("prepare send message channel_id %d device_id %d  body %s", message.ChannelID, sub.DeviceID, message.Body)
+	// broker_id,err := getBrokerForDevice(device_id)
+	// if err != nil || broker_id == nil{
+	// 	saveOfflineMessage(device_id, message_id)
+	// }
+
+	broker_addr, err := model.GetClientConn(fmt.Sprintf("%d", sub.DeviceID))
+	if err != nil {
+		log.Printf("ERROR: GetClientConn by redis  [%s]  err %s ", sub.DeviceID, err)
+		//TODO save offline message
+		return errors.New("client offline")
+	}
+
+	// broker_addr := "localhost:8600"
+	//TODO should be a func
+	w.RLock()
+	conn, ok := w.nsqConnections[broker_addr]
+	w.RUnlock()
+
+	log.Printf(" publish conn is %s", conn)
+	if !ok {
+		log.Printf("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
+		//TODO save offline message
+		return errors.New("client offline")
+	}
+
+	cmd := client.Publish(sub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
+	err = conn.sendCommand(&buf, cmd)
+	if err != nil {
+		log.Printf("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
+		// saveOfflineMessage
+		// increase failure count
+		w.stopBrokerConn(conn)
+		return errors.New("client offline")
+	}
+	log.Printf(" send message success = %s", message.Body)
+	return nil
 }
 
 func (n *Worker) idPump() {

@@ -43,24 +43,6 @@ type Client struct {
 	wg        sync.WaitGroup
 }
 
-// WriterTransaction is returned by the async publish methods
-// to retrieve metadata about the command after the
-// response is received.
-// type WriterTransaction struct {
-// 	cmd       *Command
-// 	doneChan  chan *WriterTransaction
-// 	FrameType int32         // the frame type received in response to the publish command
-// 	Data      []byte        // the response data of the publish command
-// 	Error     error         // the error (or nil) of the publish command
-// 	Args      []interface{} // the slice of variadic arguments passed to PublishAsync or MultiPublishAsync
-// }
-
-// func (t *WriterTransaction) finish() {
-// 	if t.doneChan != nil {
-// 		t.doneChan <- t
-// 	}
-// }
-
 // returned when a publish command is made against a Writer that is not connected
 var ErrNotConnected = errors.New("not connected")
 
@@ -102,88 +84,6 @@ func (c *Client) Stop() {
 	c.Close()
 	c.wg.Wait()
 }
-
-// PublishAsync publishes a message body to the specified topic
-// but does not wait for the response from `nsqd`.
-//
-// When the Writer eventually receives the response from `nsqd`,
-// the supplied `doneChan` (if specified)
-// will receive a `WriterTransaction` instance with the supplied variadic arguments
-// (and the response `FrameType`, `Data`, and `Error`)
-// func (w *Writer) PublishAsync(topic string, body []byte, doneChan chan *WriterTransaction, args ...interface{}) error {
-// 	return w.sendCommandAsync(Publish(topic, body), doneChan, args)
-// }
-
-// MultiPublishAsync publishes a slice of message bodies to the specified topic
-// but does not wait for the response from `nsqd`.
-//
-// When the Writer eventually receives the response from `nsqd`,
-// the supplied `doneChan` (if specified)
-// will receive a `WriterTransaction` instance with the supplied variadic arguments
-// (and the response `FrameType`, `Data`, and `Error`)
-// func (w *Writer) MultiPublishAsync(topic string, body [][]byte, doneChan chan *WriterTransaction, args ...interface{}) error {
-// 	cmd, err := MultiPublish(topic, body)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return w.sendCommandAsync(cmd, doneChan, args)
-// }
-
-// Publish synchronously publishes a message body to the specified topic, returning
-// the response frameType, data, and error
-// func (w *Writer) Publish(topic string, body []byte) (int32, []byte, error) {
-// 	return w.sendCommand(Publish(topic, body))
-// }
-
-// MultiPublish synchronously publishes a slice of message bodies to the specified topic, returning
-// the response frameType, data, and error
-// func (w *Writer) MultiPublish(topic string, body [][]byte) (int32, []byte, error) {
-// 	cmd, err := MultiPublish(topic, body)
-// 	if err != nil {
-// 		return -1, nil, err
-// 	}
-// 	return w.sendCommand(cmd)
-// }
-
-// func (w *Client) sendCommand(cmd *Command) (int32, []byte, error) {
-// 	doneChan := make(chan *WriterTransaction)
-// 	err := w.sendCommandAsync(cmd, doneChan, nil)
-// 	if err != nil {
-// 		close(doneChan)
-// 		return -1, nil, err
-// 	}
-// 	t := <-doneChan
-// 	return t.FrameType, t.Data, t.Error
-// }
-
-// func (w *Writer) sendCommandAsync(cmd *Command, doneChan chan *WriterTransaction, args []interface{}) error {
-// 	// keep track of how many outstanding writers we're dealing with
-// 	// in order to later ensure that we clean them all up...
-// 	atomic.AddInt32(&w.concurrentWriters, 1)
-// 	defer atomic.AddInt32(&w.concurrentWriters, -1)
-
-// 	if atomic.LoadInt32(&w.state) != StateConnected {
-// 		err := w.connect()
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	t := &WriterTransaction{
-// 		cmd:       cmd,
-// 		doneChan:  doneChan,
-// 		FrameType: -1,
-// 		Args:      args,
-// 	}
-
-// 	select {
-// 	case w.transactionChan <- t:
-// 	case <-w.exitChan:
-// 		return ErrStopped
-// 	}
-
-// 	return nil
-// }
 
 func (c *Client) Connect() error {
 	if atomic.LoadInt32(&c.stopFlag) == 1 {
@@ -287,34 +187,6 @@ func (c *Client) Close() {
 		atomic.StoreInt32(&c.state, StateInit)
 	}()
 }
-
-// func (w *Writer) transactionCleanup() {
-// 	// clean up transactions we can easily account for
-// 	for _, t := range w.transactions {
-// 		t.Error = ErrNotConnected
-// 		t.finish()
-// 	}
-// 	w.transactions = w.transactions[:0]
-
-// 	// spin and free up any writes that might have raced
-// 	// with the cleanup process (blocked on writing
-// 	// to transactionChan)
-// 	for {
-// 		select {
-// 		case t := <-w.transactionChan:
-// 			t.Error = ErrNotConnected
-// 			t.finish()
-// 		default:
-// 			// keep spinning until there are 0 concurrent writers
-// 			if atomic.LoadInt32(&w.concurrentWriters) == 0 {
-// 				return
-// 			}
-// 			// give the runtime a chance to schedule other racing goroutines
-// 			time.Sleep(5 * time.Millisecond)
-// 			continue
-// 		}
-// 	}
-// }
 
 func (c *Client) messagePump() {
 	var err error

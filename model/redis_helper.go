@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"log"
 	"time"
 )
 
@@ -77,6 +78,7 @@ func SaveOfflineMessage(clientID string, messageID int64) error {
 	key := fmt.Sprintf("off:%s", clientID)
 	expiresSecconds := 3600 * 24 * 7
 	conn.Send("ZADD", key, messageID, messageID)
+	conn.Send("ZREMRANGEBYRANK", key, 1000, 10000) // limit 1000
 	conn.Send("EXPIRE", key, expiresSecconds)
 	if _, err := conn.Do(""); err != nil {
 		return err
@@ -84,10 +86,38 @@ func SaveOfflineMessage(clientID string, messageID int64) error {
 	return nil
 }
 
-func GetOfflineMessages(clientID string) {
+func RemoveOfflineMessage(clientID string, messageID int64) (err error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	// key := fmt.Sprintf("off:%s", clientID)
-	// redis.conn.Do("ZREMRANGEBYSCORE", key)
+	key := fmt.Sprintf("off:%s", clientID)
+	conn.Send("ZREM", key, messageID)
+	if _, err := conn.Do(""); err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetOfflineMessages(clientID string) (messageIDs []int64, err error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	key := fmt.Sprintf("off:%s", clientID)
+	values, err := redis.Values(conn.Do("ZRANGE", key, 0, -1))
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("INFO: GetOfflineMessages key %s reply %#v", key, values)
+
+	for len(values) > 0 {
+		var id int64
+		// rating := -1 // initialize to illegal value to detect nil.
+		values, err = redis.Scan(values, &id)
+		if err != nil {
+			panic(err)
+		}
+		log.Printf("%#v", id)
+		messageIDs = append(messageIDs, id)
+	}
+	return messageIDs, nil
 }
