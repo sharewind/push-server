@@ -14,6 +14,7 @@ func main() {
 	addr := "localhost:8600"
 	client_id := int64(451294706224070657)
 	c := client.NewClient(addr, client_id)
+	c.Register("localhost:4171")
 	c.Connect()
 
 	channel_id := int64(1001)

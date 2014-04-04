@@ -70,10 +70,10 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("INFO: request %s ", req.URL.RawQuery)
 
-	if req.Method != "POST" {
-		util.ApiResponse(w, 405, "METHOD_NOT_SUPPORT", nil)
-		return
-	}
+	// if req.Method != "POST" {
+	// 	util.ApiResponse(w, 405, "METHOD_NOT_SUPPORT", nil)
+	// 	return
+	// }
 
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {
