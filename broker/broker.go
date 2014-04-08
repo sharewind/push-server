@@ -156,7 +156,7 @@ func (b *Broker) GetClient(clientID string, channelID string) (client *client, e
 	defer b.RUnlock()
 	key := fmt.Sprintf("%s_%s", clientID, channelID)
 	log.Printf("get client[%s] ", key)
-	log.Printf("%s", b.clients)
+	// log.Printf("%s", b.clients)
 
 	client, ok := b.clients[key]
 	if !ok {
