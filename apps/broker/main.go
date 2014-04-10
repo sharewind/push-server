@@ -43,7 +43,7 @@ func main() {
 	b := broker.NewBroker(opts)
 
 	// log.Println(util.Version("nsqd"))
-	// log.Printf("worker id %d", opts.ID)
+	// log.Debug("worker id %d", opts.ID)
 
 	// nsqd.LoadMetadata()
 	// err := nsqd.PersistMetadata()

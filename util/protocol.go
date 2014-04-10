@@ -76,7 +76,7 @@ const (
 )
 
 // The amount of time nsqd will allow a client to idle, can be overriden
-const DefaultClientTimeout = 60 * time.Second
+const DefaultClientTimeout = 600 * time.Second
 
 var validTopicNameRegex = regexp.MustCompile(`^[\.a-zA-Z0-9_-]+$`)
 var validChannelNameRegex = regexp.MustCompile(`^[\.a-zA-Z0-9_-]+(#ephemeral)?$`)

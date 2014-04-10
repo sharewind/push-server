@@ -2,11 +2,11 @@ package main
 
 import (
 	"github.com/op/go-logging"
-	stdlog "log"
+	stdlog "github.com/op/go-logging"
 	"os"
 )
 
-var log = logging.MustGetLogger("log")
+var log = logging.MustGetLogger("github.com/op/go-logging")
 
 func init() {
 	// Customize the output format

@@ -3,7 +3,6 @@ package model
 import (
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
-	"log"
 	"time"
 )
 
@@ -36,7 +35,7 @@ func FindSubscribeByDeviceID(channelID int64, deviceID int64) (result *Subscribe
 
 func SaveOrUpdateSubscribe(sub *Subscribe) (err error) {
 	exist, err := FindSubscribeByDeviceID(sub.ChannelID, sub.DeviceID)
-	log.Printf(" exist sub %#v , err %s", exist, err)
+	log.Debug(" exist sub %#v , err %s", exist, err)
 	if err == nil && exist != nil {
 		update := func(c *mgo.Collection) error {
 			q := bson.M{"channel_id": sub.ChannelID, "device_id": sub.DeviceID}

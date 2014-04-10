@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"strconv"
 	// "math/rand"
@@ -49,7 +48,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 	// <-messagePumpStartedChan
 
 	for {
-		log.Printf("INFO: client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
+		log.Debug("INFO: client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
 		if client.HeartbeatInterval > 0 {
 			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2))
 		} else {
@@ -72,7 +71,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		params := bytes.Split(line, separatorBytes)
 
 		if p.context.broker.options.Verbose {
-			log.Printf("PROTOCOL(V2): [%s] %s", client, params)
+			log.Debug("PROTOCOL(V2): [%s] %s", client, params)
 		}
 
 		response, err := p.Exec(client, params)
@@ -81,7 +80,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 			if parentErr := err.(util.ChildErr).Parent(); parentErr != nil {
 				context = " - " + parentErr.Error()
 			}
-			log.Printf("ERROR: [%s] - %s%s", client, err.Error(), context)
+			log.Debug("ERROR: [%s] - %s%s", client, err.Error(), context)
 
 			sendErr := p.Send(client, util.FrameTypeError, []byte(err.Error()))
 			if sendErr != nil {
@@ -98,13 +97,13 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		if response != nil {
 			err = p.Send(client, util.FrameTypeResponse, response)
 			if err != nil {
-				log.Printf("ERROR: send response to client error %s ", err)
+				log.Debug("ERROR: send response to client error %s ", err)
 				break
 			}
 		}
 	}
 
-	log.Printf("PROTOCOL(V2): [%s] exiting ioloop", client)
+	log.Debug("PROTOCOL(V2): [%s] exiting ioloop", client)
 	p.cleanupClientConn(client)
 	return err
 }
@@ -126,7 +125,7 @@ func (p *protocol) cleanupClientConn(client *client) {
 
 func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
 	// if p.context.broker.options.Verbose {
-	log.Printf("PROTOCOL(V2): writing msg(%s) to client(%s) - %s",
+	log.Debug("PROTOCOL(V2): writing msg(%s) to client(%s) - %s",
 		msg.Id, client, msg.Body)
 	// }
 
@@ -141,7 +140,7 @@ func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) 
 		return err
 	}
 
-	log.Printf("PROTOCOL(V2): Success writing msg(%s) to client(%s) - %s",
+	log.Debug("PROTOCOL(V2): Success writing msg(%s) to client(%s) - %s",
 		msg.Id, client, msg.Body)
 	return nil
 }
@@ -224,7 +223,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if p.context.broker.options.Verbose {
-		log.Printf("PROTOCOL(V2): [%s] %+v", client, identifyData)
+		log.Debug("PROTOCOL(V2): [%s] %+v", client, identifyData)
 	}
 
 	err = client.Identify(identifyData)
@@ -285,7 +284,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if tlsv1 {
-		log.Printf("PROTOCOL(V2): [%s] upgrading connection to TLS", client)
+		log.Debug("PROTOCOL(V2): [%s] upgrading connection to TLS", client)
 		err = client.UpgradeTLS()
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -298,7 +297,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if snappy {
-		log.Printf("PROTOCOL(V2): [%s] upgrading connection to snappy", client)
+		log.Debug("PROTOCOL(V2): [%s] upgrading connection to snappy", client)
 		err = client.UpgradeSnappy()
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -311,7 +310,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if deflate {
-		log.Printf("PROTOCOL(V2): [%s] upgrading connection to deflate", client)
+		log.Debug("PROTOCOL(V2): [%s] upgrading connection to deflate", client)
 		err = client.UpgradeDeflate(deflateLevel)
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -335,7 +334,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot SUB with heartbeats disabled")
 	}
 
-	log.Printf("receive params on sub  %s", params)
+	log.Debug("receive params on sub  %s", params)
 	if len(params) < 1 {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "SUB insufficient number of parameters")
 	}
@@ -374,13 +373,13 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	p.context.broker.AddClient(client.ClientID, str_channel_id, client)
-	log.Printf("INFO: clientId %d sub channel %s success ", client.ClientID, channel_id)
+	log.Debug("INFO: clientId %d sub channel %s success ", client.ClientID, channel_id)
 
 	// touch devie online
 	model.TouchDeviceOnline(client_id)
 
 	// should send client connected eventsf
-	log.Printf("INFO: SetClientConn clientID=%s, broker_addr=%s", client.ClientID, client.LocalAddr().String())
+	log.Debug("INFO: SetClientConn clientID=%s, broker_addr=%s", client.ClientID, client.LocalAddr().String())
 	err = model.SetClientConn(client.ClientID, client.LocalAddr().String())
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
@@ -408,7 +407,7 @@ func (p *protocol) checkOfflineMessage(client *client) {
 
 	messageIDs, err := model.GetOfflineMessages(client.ClientID)
 	if err != nil || messageIDs == nil {
-		log.Printf("ERROR: GetOfflineMessages clientID %s error %s ", client.ClientID, err)
+		log.Debug("ERROR: GetOfflineMessages clientID %s error %s ", client.ClientID, err)
 		return
 	}
 
@@ -416,13 +415,13 @@ func (p *protocol) checkOfflineMessage(client *client) {
 	for _, messageID := range messageIDs {
 		msg, err := model.FindMessageByID(messageID)
 		if err != nil || msg == nil {
-			log.Printf("ERROR: client %s message ID %d message doesn't exist, err %s", client.ClientID, messageID, err)
+			log.Debug("ERROR: client %s message ID %d message doesn't exist, err %s", client.ClientID, messageID, err)
 			continue
 		}
 
 		// live := msg.CreatedAt + msg.Expires*100000000000000
 		// if time.Now().UnixNano() > live {
-		// 	log.Printf("ERROR: client %s message ID %d message expired.", client.ClientID, messageID)
+		// 	log.Debug("ERROR: client %s message ID %d message expired.", client.ClientID, messageID)
 		// 	model.RemoveOfflineMessage(client.ClientID, messageID)
 		// 	continue
 		// }
@@ -436,17 +435,17 @@ func (p *protocol) checkOfflineMessage(client *client) {
 			Body:      []byte(msg.Body),
 			Timestamp: msg.CreatedAt,
 		}
-		log.Printf("msg is %#v", msg2)
+		log.Debug("msg is %#v", msg2)
 		err = p.SendMessage(client, msg2, &buf)
 		if err != nil {
-			log.Printf("send message to client %s error  %s", client, err)
+			log.Debug("send message to client %s error  %s", client, err)
 		}
 
 		client.Lock()
 		err = client.Flush()
 		client.Unlock()
 
-		log.Printf("send message %#v to client %s success ", msg, client)
+		log.Debug("send message %#v to client %s success ", msg, client)
 		model.RemoveOfflineMessage(client.ClientID, messageID)
 
 	}
@@ -454,7 +453,7 @@ func (p *protocol) checkOfflineMessage(client *client) {
 
 // hearbeat
 func (p *protocol) HT(client *client, params [][]byte) ([]byte, error) {
-	log.Printf("[%s] heartbeat received", client)
+	log.Debug("[%s] heartbeat received", client)
 	return []byte("HT"), nil
 }
 
@@ -503,7 +502,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	if len(params) < 3 {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")
 	}
-	log.Printf("receive params on sub  %s", params)
+	log.Debug("receive params on sub  %s", params)
 
 	bodyLen, err := readLen(client.Reader, client.lenSlice)
 	if err != nil {
@@ -525,30 +524,30 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	channel_id := string(params[2])
 	message_id := string(params[3])
 	msgId, _ := strconv.ParseInt(message_id, 10, 64)
-	log.Printf("msgId ==  %d", msgId)
+	log.Debug("msgId ==  %d", msgId)
 
 	// TODO 另外启动一个channel 与 goroutine 用来处理这个消息
 	dstClient, err := p.context.broker.GetClient(client_id, channel_id)
 	if err != nil || dstClient == nil {
 		p.ackPublish(client, util.ACK_OFF, client_id, msgId)
 		// model.SaveOfflineMessage(dstClient.ClientID, msgId)
-		log.Printf("client %s is null", client_id)
+		log.Debug("client %s is null", client_id)
 		return nil, nil
 		//return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")
 		// 	return FrameTypeACKError message_id
 	}
-	log.Printf("get client %s by channel %s = %s  ", client_id, channel_id, dstClient)
+	log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, dstClient)
 
 	msg := &Message{
 		Id:        util.Guid(msgId).Hex(),
 		Body:      body,
 		Timestamp: time.Now().UnixNano(),
 	}
-	log.Printf("msg is %#v", msg)
+	log.Debug("msg is %#v", msg)
 	// dstClient.SendingMessage()
 	err = p.SendMessage(dstClient, msg, &buf)
 	if err != nil {
-		log.Printf("send message to client %s error  %s", dstClient, err)
+		log.Debug("send message to client %s error  %s", dstClient, err)
 	}
 
 	dstClient.Lock()
@@ -567,7 +566,7 @@ func (p *protocol) ackPublish(client *client, ackType int32, clientID string, ms
 	response := []byte(fmt.Sprintf("%d %s %d", ackType, clientID, msgID))
 	err = p.Send(client, util.FrameTypeAck, response)
 	if err != nil {
-		log.Printf("ERROR: send response to client error %s ", err)
+		log.Debug("ERROR: send response to client error %s ", err)
 		p.cleanupClientConn(client)
 	}
 	return err

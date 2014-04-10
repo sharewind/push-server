@@ -1,13 +1,15 @@
 package api
 
 import (
-	"log"
+	"github.com/op/go-logging"
 	"net"
 	"runtime"
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/util"
 )
+
+var log = logging.MustGetLogger("api")
 
 type PushAPI struct {
 	httpAddr     *net.TCPAddr
@@ -60,7 +62,7 @@ func (p *PushAPI) idPump() {
 			now := time.Now()
 			if now.Sub(lastError) > time.Second {
 				// only print the error once/second
-				log.Printf("ERROR: %s", err.Error())
+				log.Debug("ERROR: %s", err.Error())
 				lastError = now
 			}
 			runtime.Gosched()
@@ -74,7 +76,7 @@ func (p *PushAPI) idPump() {
 	}
 
 exit:
-	log.Printf("ID Pump: closing")
+	log.Debug("ID Pump: closing")
 }
 
 func (p *PushAPI) Exit() {

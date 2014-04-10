@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"hash/crc32"
 	"io"
-	"log"
 	"os"
 	"time"
 )

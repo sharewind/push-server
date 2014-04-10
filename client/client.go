@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/op/go-logging"
 	"net"
 	"os"
 	"strings"
@@ -16,6 +16,8 @@ import (
 	"code.sohuno.com/kzapp/push-server/broker"
 	. "code.sohuno.com/kzapp/push-server/util"
 )
+
+var log = logging.MustGetLogger("client")
 
 // Writer is a high-level type to publish to NSQ.
 //
@@ -95,10 +97,10 @@ func (c *Client) Connect() error {
 		return ErrNotConnected
 	}
 
-	log.Printf("[%s] connecting...", c)
+	log.Debug("[%s] connecting...", c)
 	conn, err := net.DialTimeout("tcp", c.Addr, time.Second*5)
 	if err != nil {
-		log.Printf("ERROR: [%s] failed to dial %s - %s", c, c.Addr, err)
+		log.Debug("ERROR: [%s] failed to dial %s - %s", c, c.Addr, err)
 		atomic.StoreInt32(&c.state, StateInit)
 		return err
 	}
@@ -109,7 +111,7 @@ func (c *Client) Connect() error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	_, err = c.Write(MagicV2)
 	if err != nil {
-		log.Printf("ERROR: [%s] failed to write magic - %s", c, err)
+		log.Debug("ERROR: [%s] failed to write magic - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -121,7 +123,7 @@ func (c *Client) Connect() error {
 	ci["role"] = "client"
 	cmd, err := Identify(ci)
 	if err != nil {
-		log.Printf("ERROR: [%s] failed to create IDENTIFY command - %s", c, err)
+		log.Debug("ERROR: [%s] failed to create IDENTIFY command - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -129,7 +131,7 @@ func (c *Client) Connect() error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err = cmd.Write(c)
 	if err != nil {
-		log.Printf("ERROR: [%s] failed to write IDENTIFY - %s", c, err)
+		log.Debug("ERROR: [%s] failed to write IDENTIFY - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -137,20 +139,20 @@ func (c *Client) Connect() error {
 	c.SetReadDeadline(time.Now().Add(c.HeartbeatInterval * 2))
 	resp, err := ReadResponse(c)
 	if err != nil {
-		log.Printf("ERROR: [%s] failed to read IDENTIFY response - %s", c, err)
+		log.Debug("ERROR: [%s] failed to read IDENTIFY response - %s", c, err)
 		c.Close()
 		return err
 	}
 
 	frameType, data, err := UnpackResponse(resp)
 	if err != nil {
-		log.Printf("ERROR: [%s] failed to unpack IDENTIFY response - %s", c, resp)
+		log.Debug("ERROR: [%s] failed to unpack IDENTIFY response - %s", c, resp)
 		c.Close()
 		return err
 	}
 
 	if frameType == FrameTypeError {
-		log.Printf("ERROR: [%s] IDENTIFY returned error response - %s", c, data)
+		log.Debug("ERROR: [%s] IDENTIFY returned error response - %s", c, data)
 		c.Close()
 		return errors.New(string(data))
 	}
@@ -164,11 +166,11 @@ func (c *Client) Connect() error {
 
 func (c *Client) Register(addr string) error {
 	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%d&device_type=3&device_name=搜狐Android测试机%d", addr, time.Now().UnixNano(), time.Now().Unix())
-	log.Printf("LOOKUPD: querying %s", endpoint)
+	log.Debug("LOOKUPD: querying %s", endpoint)
 
 	data, err := ApiRequest(endpoint)
 	if err != nil {
-		log.Printf("ERROR: Register %s - %s", addr, err.Error())
+		log.Debug("ERROR: Register %s - %s", addr, err.Error())
 		return err
 	}
 
@@ -182,11 +184,11 @@ func (c *Client) Subscribe(channel_id int64) error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err := cmd.Write(c)
 	if err != nil {
-		log.Printf("ERROR: [%s] failed to write Subscribe - %s", c, err)
+		log.Debug("ERROR: [%s] failed to write Subscribe - %s", c, err)
 		c.Close()
 		return err
 	}
-	log.Printf("INFO: [%s] success to write Subscribe ", c)
+	log.Debug("INFO: [%s] success to write Subscribe ", c)
 	return nil
 }
 
@@ -217,7 +219,7 @@ func (c *Client) messagePump() {
 			c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 			err = cmd.Write(c)
 			if err != nil {
-				log.Printf("ERROR: [%s] failed to write HeartBeat - %s", c, err)
+				log.Debug("ERROR: [%s] failed to write HeartBeat - %s", c, err)
 				goto exit
 			}
 			// shoud receive response
@@ -228,10 +230,10 @@ func (c *Client) messagePump() {
 	}
 
 exit:
-	log.Printf("client: [%s] exiting messagePump", c)
+	log.Debug("client: [%s] exiting messagePump", c)
 	heartbeatTicker.Stop()
 	if err != nil {
-		log.Printf("client: [%s] messagePump error - %s", c, err.Error())
+		log.Debug("client: [%s] messagePump error - %s", c, err.Error())
 	}
 }
 
@@ -255,7 +257,7 @@ func (c *Client) readLoop() {
 			msg, err := broker.DecodeMessage(data)
 			// msg.cmdChan = c.cmdChan
 			// msg.responseChan = c.finishedMessages
-			log.Printf("INFO: [%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
+			log.Debug("INFO: [%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
 			if err != nil {
 				// handleError(q, c, fmt.Sprintf("[%s] error (%s) decoding message %s",
 				// 	c, err.Error(), data))
@@ -271,7 +273,7 @@ func (c *Client) readLoop() {
 			// atomic.StoreInt64(&c.lastMsgTimestamp, time.Now().UnixNano())
 
 			// if q.VerboseLogging {
-			// 	log.Printf("[%s] (remain %d) FrameTypeMessage: %s - %s",
+			// 	log.Debug("[%s] (remain %d) FrameTypeMessage: %s - %s",
 			// 		c, remain, msg.Id, msg.Body)
 			// }
 
@@ -283,11 +285,11 @@ func (c *Client) readLoop() {
 				// server is ready for us to close (it ack'd our StartClose)
 				// we can assume we will not receive any more messages over this channel
 				// (but we can still write back responses)
-				log.Printf("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
+				log.Debug("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
 				atomic.StoreInt32(&c.stopFlag, 1)
 			case bytes.Equal(data, []byte("HT")):
 				// var buf bytes.Buffer
-				log.Printf("[%s] heartbeat received", c)
+				log.Debug("[%s] heartbeat received", c)
 				// err := c.sendCommand(&buf, Nop())
 				// if err != nil {
 				// 	handleError(q, c, fmt.Sprintf("[%s] error sending NOP - %s",
@@ -295,16 +297,16 @@ func (c *Client) readLoop() {
 				// 	goto exit
 				// }
 			default:
-				log.Printf("FrameTypeResponse receive %s", string(data))
+				log.Debug("FrameTypeResponse receive %s", string(data))
 			}
 		case FrameTypeError:
-			log.Printf("[%s] error from nsqd %s", c, data)
+			log.Debug("[%s] error from nsqd %s", c, data)
 		default:
-			log.Printf("[%s] unknown message type %d", c, frameType)
+			log.Debug("[%s] unknown message type %d", c, frameType)
 		}
 	}
 
 exit:
 	c.wg.Done()
-	log.Printf("[%s] readLoop exiting", c)
+	log.Debug("[%s] readLoop exiting", c)
 }

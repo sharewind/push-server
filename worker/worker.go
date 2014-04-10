@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/op/go-logging"
 	"net"
 	"runtime"
 	"strconv"
@@ -22,6 +22,8 @@ import (
 
 	// "github.com/bitly/go-simplejson"
 )
+
+var log = logging.MustGetLogger("worker")
 
 var separatorBytes = []byte(" ")
 
@@ -217,7 +219,7 @@ func (w *Worker) Publish() {
 		}
 	}
 exit:
-	log.Printf("publish msg exit!")
+	log.Debug("publish msg exit!")
 }
 
 func (w *Worker) pushMessage(message *model.Message) {
@@ -227,14 +229,14 @@ func (w *Worker) pushMessage(message *model.Message) {
 	limit := -1
 	subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
 	if err != nil {
-		log.Printf("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
+		log.Debug("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
 		return
 	}
 
 	for _, sub := range subs {
 		err := w.sendMessage2Client(&sub, message)
 		if err != nil {
-			log.Printf("INFO saveOfflineMessage clientID %s messageID %s", sub.DeviceID, message.ID)
+			log.Debug("INFO saveOfflineMessage clientID %s messageID %s", sub.DeviceID, message.ID)
 			model.SaveOfflineMessage(fmt.Sprintf("%d", sub.DeviceID), message.ID)
 		}
 	}
@@ -242,7 +244,7 @@ func (w *Worker) pushMessage(message *model.Message) {
 
 func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message) (err error) {
 	var buf bytes.Buffer
-	log.Printf("prepare send message channel_id %d device_id %d  body %s", message.ChannelID, sub.DeviceID, message.Body)
+	log.Debug("prepare send message channel_id %d device_id %d  body %s", message.ChannelID, sub.DeviceID, message.Body)
 	// broker_id,err := getBrokerForDevice(device_id)
 	// if err != nil || broker_id == nil{
 	// 	saveOfflineMessage(device_id, message_id)
@@ -250,7 +252,7 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 
 	broker_addr, err := model.GetClientConn(fmt.Sprintf("%d", sub.DeviceID))
 	if err != nil {
-		log.Printf("ERROR: GetClientConn by redis  [%s]  err %s ", sub.DeviceID, err)
+		log.Debug("ERROR: GetClientConn by redis  [%s]  err %s ", sub.DeviceID, err)
 		//TODO save offline message
 		return errors.New("client offline")
 	}
@@ -261,9 +263,9 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 	conn, ok := w.nsqConnections[broker_addr]
 	w.RUnlock()
 
-	log.Printf(" publish conn is %s", conn)
+	log.Debug(" publish conn is %s", conn)
 	if !ok {
-		log.Printf("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
+		log.Debug("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
 		//TODO save offline message
 		return errors.New("client offline")
 	}
@@ -271,13 +273,13 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 	cmd := client.Publish(sub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
 	err = conn.sendCommand(&buf, cmd)
 	if err != nil {
-		log.Printf("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
+		log.Debug("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
 		// saveOfflineMessage
 		// increase failure count
 		w.stopBrokerConn(conn)
 		return errors.New("client offline")
 	}
-	log.Printf(" send message success = %s", message.Body)
+	log.Debug(" send message success = %s", message.Body)
 	return nil
 }
 
@@ -291,7 +293,7 @@ func (n *Worker) idPump() {
 			now := time.Now()
 			if now.Sub(lastError) > time.Second {
 				// only print the error once/second
-				log.Printf("ERROR: %s", err.Error())
+				log.Debug("ERROR: %s", err.Error())
 				lastError = now
 			}
 			runtime.Gosched()
@@ -305,7 +307,7 @@ func (n *Worker) idPump() {
 	}
 
 exit:
-	log.Printf("ID: closing")
+	log.Debug("ID: closing")
 }
 
 // ConnectToNSQ takes a nsqd address to connect directly to.
@@ -314,7 +316,7 @@ exit:
 // automatically.  This method is useful when you want to connect to a single, local,
 // instance.
 func (q *Worker) ConnectToBroker(addr string) error {
-	log.Printf("connect to broker %s", addr)
+	log.Debug("connect to broker %s", addr)
 
 	var buf bytes.Buffer
 	if atomic.LoadInt32(&q.stopFlag) == 1 {
@@ -330,7 +332,7 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	}
 	q.RUnlock()
 
-	log.Printf("[%s] connecting to nsqd", addr)
+	log.Debug("[%s] connecting to nsqd", addr)
 
 	connection, err := newNSQConn(nil, addr, q.ReadTimeout, q.WriteTimeout)
 	if err != nil {
@@ -395,16 +397,16 @@ func (q *Worker) ConnectToBroker(addr string) error {
 			return fmt.Errorf("[%s] error (%s) unmarshaling IDENTIFY response %s", connection, err.Error(), data)
 		}
 
-		log.Printf("[%s] IDENTIFY response: %+v", connection, resp)
+		log.Debug("[%s] IDENTIFY response: %+v", connection, resp)
 
 		// connection.maxRdyCount = resp.MaxRdyCount
 		// if resp.MaxRdyCount < int64(q.MaxInFlight()) {
-		// 	log.Printf("[%s] max RDY count %d < reader max in flight %d, truncation possible",
+		// 	log.Debug("[%s] max RDY count %d < reader max in flight %d, truncation possible",
 		// 		connection, resp.MaxRdyCount, q.MaxInFlight())
 		// }
 
 		// if resp.TLSv1 {
-		// 	log.Printf("[%s] upgrading to TLS", connection)
+		// 	log.Debug("[%s] upgrading to TLS", connection)
 		// 	err := connection.upgradeTLS(q.TLSConfig)
 		// 	if err != nil {
 		// 		cleanupConnection()
@@ -413,7 +415,7 @@ func (q *Worker) ConnectToBroker(addr string) error {
 		// }
 
 		// if resp.Deflate {
-		// 	log.Printf("[%s] upgrading to Deflate", connection)
+		// 	log.Debug("[%s] upgrading to Deflate", connection)
 		// 	err := connection.upgradeDeflate(q.DeflateLevel)
 		// 	if err != nil {
 		// 		connection.Close()
@@ -422,7 +424,7 @@ func (q *Worker) ConnectToBroker(addr string) error {
 		// }
 
 		// if resp.Snappy {
-		// 	log.Printf("[%s] upgrading to Snappy", connection)
+		// 	log.Debug("[%s] upgrading to Snappy", connection)
 		// 	err := connection.upgradeSnappy()
 		// 	if err != nil {
 		// 		connection.Close()
@@ -444,7 +446,7 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	// }
 	// q.RUnlock()
 
-	log.Printf("connect to broker %s success", addr)
+	log.Debug("connect to broker %s success", addr)
 	connection.wg.Add(2)
 	go q.readLoop(connection)
 	go q.messagePump(connection)
@@ -454,7 +456,7 @@ func (q *Worker) ConnectToBroker(addr string) error {
 }
 
 func handleError(q *Worker, c *nsqConn, errMsg string) {
-	log.Printf(errMsg)
+	log.Debug(errMsg)
 	atomic.StoreInt32(&c.stopFlag, 1)
 
 	// q.RLock()
@@ -463,14 +465,14 @@ func handleError(q *Worker, c *nsqConn, errMsg string) {
 	// if numLookupd == 0 {
 	go func(addr string) {
 		for {
-			log.Printf("[%s] re-connecting in 15 seconds...", addr)
+			log.Debug("[%s] re-connecting in 15 seconds...", addr)
 			time.Sleep(15 * time.Second)
 			if atomic.LoadInt32(&q.stopFlag) == 1 {
 				break
 			}
 			err := q.ConnectToBroker(addr)
 			if err != nil && err != ErrAlreadyConnected {
-				log.Printf("ERROR: failed to connect to %s - %s",
+				log.Debug("ERROR: failed to connect to %s - %s",
 					addr, err.Error())
 				continue
 			}
@@ -494,7 +496,7 @@ func (w *Worker) messagePump(c *nsqConn) {
 
 		select {
 		case <-c.exitChan:
-			log.Printf("[%s] breaking out of message pump loop", c)
+			log.Debug("[%s] breaking out of message pump loop", c)
 			// Indicate drainReady because we will not pull any more off finishedMessages
 			// close(c.drainReady)
 			goto exit
@@ -502,7 +504,7 @@ func (w *Worker) messagePump(c *nsqConn) {
 			cmd := client.HeartBeat()
 			err = c.sendCommand(&buf, cmd)
 			if err != nil {
-				log.Printf("ERROR: [%s] failed to writing heartbeat - %s", c, err)
+				log.Debug("ERROR: [%s] failed to writing heartbeat - %s", c, err)
 				w.stopBrokerConn(c)
 				continue
 			}
@@ -514,10 +516,10 @@ func (w *Worker) messagePump(c *nsqConn) {
 	}
 
 exit:
-	log.Printf("broker: [%s] exiting messagePump", c)
+	log.Debug("broker: [%s] exiting messagePump", c)
 	heartbeatTicker.Stop()
 	if err != nil {
-		log.Printf("broker: [%s] messagePump error - %s", c, err.Error())
+		log.Debug("broker: [%s] messagePump error - %s", c, err.Error())
 	}
 }
 
@@ -544,7 +546,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 				handleError(w, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
 				continue
 			}
-			log.Printf("INFO: [%s] FrameTypeMessage receive  %s - %s", c, msg.Id, msg.Body)
+			log.Debug("INFO: [%s] FrameTypeMessage receive  %s - %s", c, msg.Id, msg.Body)
 
 			// remain := atomic.AddInt64(&c.rdyCount, -1)
 			// atomic.AddInt64(&q.totalRdyCount, -1)
@@ -555,7 +557,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 			// atomic.StoreInt64(&c.lastMsgTimestamp, time.Now().UnixNano())
 
 			// if q.VerboseLogging {
-			// 	log.Printf("[%s] (remain %d) FrameTypeMessage: %s - %s",
+			// 	log.Debug("[%s] (remain %d) FrameTypeMessage: %s - %s",
 			// 		c, remain, msg.Id, msg.Body)
 			// }
 
@@ -567,7 +569,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 				// server is ready for us to close (it ack'd our StartClose)
 				// we can assume we will not receive any more messages over this channel
 				// (but we can still write back responses)
-				log.Printf("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
+				log.Debug("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
 				atomic.StoreInt32(&c.stopFlag, 1)
 			case bytes.Equal(data, []byte("HT")):
 				// var buf bytes.Buffer
@@ -577,16 +579,16 @@ func (w *Worker) readLoop(c *nsqConn) {
 				// 		c, err.Error()))
 				// 	goto exit
 				// }
-				log.Printf("[%s] heartbeat received", c)
+				log.Debug("[%s] heartbeat received", c)
 			}
 		case FrameTypeAck:
-			log.Printf("[%s] ack receive %s", c, data)
+			log.Debug("[%s] ack receive %s", c, data)
 			params := bytes.Split(data, separatorBytes)
 			ackType, err := strconv.ParseInt(string(params[0]), 10, 64)
 			clientId, err := strconv.ParseInt(string(params[1]), 10, 64)
 			msgId, err := strconv.ParseInt(string(params[1]), 10, 64)
 			if err != nil {
-				log.Printf("ERROR: parse msgId error %s", err)
+				log.Debug("ERROR: parse msgId error %s", err)
 				break
 			}
 
@@ -600,20 +602,20 @@ func (w *Worker) readLoop(c *nsqConn) {
 			}
 
 		case FrameTypeError:
-			log.Printf("[%s] error from nsqd %s", c, data)
+			log.Debug("[%s] error from nsqd %s", c, data)
 		default:
-			log.Printf("[%s] unknown message type %d", c, frameType)
+			log.Debug("[%s] unknown message type %d", c, frameType)
 		}
 	}
 
 exit:
 	c.wg.Done()
-	log.Printf("[%s] readLoop exiting", c)
+	log.Debug("[%s] readLoop exiting", c)
 }
 
 func (q *Worker) stopBrokerConn(c *nsqConn) {
 	c.stopper.Do(func() {
-		log.Printf("[%s] beginning stopFinishLoop", c)
+		log.Debug("[%s] beginning stopFinishLoop", c)
 		close(c.exitChan)
 		c.Close()
 		go q.cleanupConnection(c)
@@ -630,7 +632,7 @@ func (q *Worker) cleanupConnection(c *nsqConn) {
 	left := len(q.nsqConnections)
 	q.Unlock()
 
-	log.Printf("there are %d connections left alive", left)
+	log.Debug("there are %d connections left alive", left)
 }
 
 // Stop will gracefully stop the Reader
@@ -640,7 +642,7 @@ func (q *Worker) Stop() {
 		return
 	}
 
-	log.Printf("stopping worker")
+	log.Debug("stopping worker")
 	if q.httpListener != nil {
 		q.httpListener.Close()
 	}
@@ -656,7 +658,7 @@ func (q *Worker) Stop() {
 		for _, c := range q.nsqConnections {
 			err := c.sendCommand(&buf, client.StartClose())
 			if err != nil {
-				log.Printf("[%s] failed to start close - %s", c, err.Error())
+				log.Debug("[%s] failed to start close - %s", c, err.Error())
 			}
 		}
 		q.RUnlock()

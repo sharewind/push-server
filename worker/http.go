@@ -6,7 +6,6 @@ import (
 	// "fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	// "net"
 	"net/http"
 	"net/url"
@@ -61,7 +60,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/debug/pprof/threadcreate":
 		httpprof.Handler("threadcreate").ServeHTTP(w, req)
 	default:
-		log.Printf("ERROR: 404 %s", req.URL.Path)
+		log.Debug("ERROR: 404 %s", req.URL.Path)
 		util.ApiResponse(w, 404, "NOT_FOUND", nil)
 	}
 }
@@ -82,7 +81,7 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 // func (s *httpServer) createChannelHandler(w http.ResponseWriter, req *http.Request) {
 // 	reqParams, err := util.NewReqParams(req)
 // 	if err != nil {
-// 		log.Printf("ERROR: failed to parse request params - %s", err.Error())
+// 		log.Debug("ERROR: failed to parse request params - %s", err.Error())
 // 		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
 // 		return
 // 	}
@@ -129,7 +128,7 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if int64(len(body)) == readMax {
-		log.Printf("ERROR: /put hit max message size")
+		log.Debug("ERROR: /put hit max message size")
 		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
 		return
 	}
@@ -140,28 +139,28 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {
-		log.Printf("ERROR: failed to parse request params - %s", err.Error())
+		log.Debug("ERROR: failed to parse request params - %s", err.Error())
 		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
 		return
 	}
 
 	channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
 	if err != nil {
-		log.Printf("ERROR: failed to parse channel_id params - %s", err.Error())
+		log.Debug("ERROR: failed to parse channel_id params - %s", err.Error())
 		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
 		return
 	}
 
 	// push_type, err := strconv.ParseInt(reqParams.Get("push_type"), 10, 8)
 	// if err != nil {
-	// 	log.Printf("ERROR: failed to parse push_type params - %s", err.Error())
+	// 	log.Debug("ERROR: failed to parse push_type params - %s", err.Error())
 	// 	util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
 	// 	return
 	// }
 
 	device_type, err := strconv.ParseInt(reqParams.Get("device_type"), 10, 8)
 	if err != nil {
-		log.Printf("ERROR: failed to parse device_type params - %s", err.Error())
+		log.Debug("ERROR: failed to parse device_type params - %s", err.Error())
 		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
 		return
 	}
@@ -176,7 +175,7 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	err = model.SaveMessage(msg)
 	if err != nil {
-		log.Printf("ERROR: failed to SaveMessage %#v ,err=%s", msg, err.Error())
+		log.Debug("ERROR: failed to SaveMessage %#v ,err=%s", msg, err.Error())
 		util.ApiResponse(w, 500, "INVALID_REQUEST", nil)
 		return
 	}

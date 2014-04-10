@@ -3,11 +3,12 @@ package model
 import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"log"
+	"github.com/op/go-logging"
 	"time"
 )
 
 var (
+	log         = logging.MustGetLogger("model")
 	redisPool   *redis.Pool
 	redisServer string = "localhost:6379" // host:port of server
 	password    string
@@ -107,7 +108,7 @@ func GetOfflineMessages(clientID string) (messageIDs []int64, err error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("INFO: GetOfflineMessages key %s reply %#v", key, values)
+	log.Debug("INFO: GetOfflineMessages key %s reply %#v", key, values)
 
 	for len(values) > 0 {
 		var id int64
@@ -116,7 +117,7 @@ func GetOfflineMessages(clientID string) (messageIDs []int64, err error) {
 		if err != nil {
 			panic(err)
 		}
-		log.Printf("%#v", id)
+		log.Debug("%#v", id)
 		messageIDs = append(messageIDs, id)
 	}
 	return messageIDs, nil
@@ -131,7 +132,7 @@ func IncrMsgOKCount(messageID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Printf("INFO: IncrMsgOKCount key %s reply %d", key, reply)
+	log.Debug("INFO: IncrMsgOKCount key %s reply %d", key, reply)
 	return reply, err
 }
 
@@ -144,7 +145,7 @@ func IncrMsgErrCount(messageID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Printf("INFO: IncrMsgErrCount key %s reply %d", key, reply)
+	log.Debug("INFO: IncrMsgErrCount key %s reply %d", key, reply)
 	return reply, err
 }
 
@@ -157,7 +158,7 @@ func IncrClientOKCount(clientID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Printf("INFO: IncrClientOKCount key %s reply %d", key, reply)
+	log.Debug("INFO: IncrClientOKCount key %s reply %d", key, reply)
 	return reply, err
 }
 
@@ -170,6 +171,6 @@ func IncrClientErrCount(clientID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Printf("INFO: IncrClientErrCount key %s reply %d", key, reply)
+	log.Debug("INFO: IncrClientErrCount key %s reply %d", key, reply)
 	return reply, err
 }

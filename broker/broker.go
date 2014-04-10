@@ -5,13 +5,15 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/op/go-logging"
 	"net"
 	"sync"
 	//"strings"
 )
 
 const DefaultClientMapSize = 10000
+
+var log = logging.MustGetLogger("broker")
 
 type Broker struct {
 	sync.RWMutex
@@ -126,7 +128,7 @@ func (b *Broker) AddClient(clientID string, channelID string, client *client) {
 	defer b.Unlock()
 
 	key := fmt.Sprintf("%s_%s", clientID, channelID)
-	log.Printf("put client[%s] = %s", key, client)
+	log.Debug("put client[%s] = %s", key, client)
 	_, ok := b.clients[key]
 	if ok {
 		return
@@ -155,8 +157,8 @@ func (b *Broker) GetClient(clientID string, channelID string) (client *client, e
 	b.RLock()
 	defer b.RUnlock()
 	key := fmt.Sprintf("%s_%s", clientID, channelID)
-	log.Printf("get client[%s] ", key)
-	// log.Printf("%s", b.clients)
+	log.Debug("get client[%s] ", key)
+	// log.Debug("%s", b.clients)
 
 	client, ok := b.clients[key]
 	if !ok {

@@ -5,16 +5,21 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 )
 
 func main() {
+	runtime.GOMAXPROCS(4)
 	fmt.Println("client start!")
 
 	for i := 0; i < 10000; i++ {
 		go wrapperFunc()
-		time.Sleep(20 * time.Millisecond)
+		fmt.Println(i)
+		// runtime.Gosched()
+		time.Sleep(1 * time.Millisecond)
+
 	}
 
 	exitChan := make(chan int)
@@ -40,13 +45,13 @@ func wrapperFunc() {
 
 func createClient() {
 	defer func() {
-		fmt.Printf("createClient func done !")
+		fmt.Println("createClient func done !")
 	}()
-	addr := "localhost:8600"
+	addr := "10.2.58.178:8600"
 
 	client_id := int64(451294706224070657)
 	c := client.NewClient(addr, client_id)
-	c.Register("localhost:4171")
+	c.Register("10.2.58.178:4171")
 	c.Connect()
 
 	channel_id := int64(1001)
