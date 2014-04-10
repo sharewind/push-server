@@ -6,12 +6,11 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
-	// "os"
-	// "strings"
-	"fmt"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,9 +18,12 @@ import (
 	"code.sohuno.com/kzapp/push-server/broker"
 	"code.sohuno.com/kzapp/push-server/client"
 	"code.sohuno.com/kzapp/push-server/model"
-	"code.sohuno.com/kzapp/push-server/util"
+	. "code.sohuno.com/kzapp/push-server/util"
+
 	// "github.com/bitly/go-simplejson"
 )
+
+var separatorBytes = []byte(" ")
 
 // returned from ConnectToNSQ when already connected
 var ErrAlreadyConnected = errors.New("already connected")
@@ -90,7 +92,7 @@ type Worker struct {
 	messageCount    uint64
 	incomingMsgChan chan *model.Message
 	exitChan        chan int
-	waitGroup       util.WaitGroupWrapper
+	waitGroup       WaitGroupWrapper
 	// notifyChan      chan interface{}
 }
 
@@ -133,7 +135,7 @@ func NewWorker(HTTPAddress string) *Worker {
 		// ShortIdentifier: strings.Split(hostname, ".")[0],
 		// LongIdentifier:  hostname,
 
-		ReadTimeout:       client.DefaultClientTimeout,
+		ReadTimeout:       DefaultClientTimeout,
 		WriteTimeout:      time.Second,
 		HeartbeatInterval: 30 * time.Second,
 
@@ -176,7 +178,7 @@ func (w *Worker) Main() {
 	}
 	w.httpListener = httpListener
 	httpServer := &httpServer{context: context}
-	w.waitGroup.Wrap(func() { util.HTTPServer(w.httpListener, httpServer) })
+	w.waitGroup.Wrap(func() { HTTPServer(w.httpListener, httpServer) })
 
 	// if n.options.StatsdAddress != "" {
 	// 	n.waitGroup.Wrap(func() { n.statsdLoop() })
@@ -280,7 +282,7 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 }
 
 func (n *Worker) idPump() {
-	factory := &util.GuidFactory{}
+	factory := &GuidFactory{}
 	lastError := time.Now()
 	WorkerID := int64(2) //TODO
 	for {
@@ -533,7 +535,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 		}
 
 		switch frameType {
-		case client.FrameTypeMessage:
+		case FrameTypeMessage:
 			msg, err := broker.DecodeMessage(data)
 			// msg.cmdChan = c.cmdChan
 			// msg.responseChan = c.finishedMessages
@@ -559,7 +561,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 
 			// q.incomingMessages <- msg
 			// c.rdyChan <- c
-		case client.FrameTypeResponse:
+		case FrameTypeResponse:
 			switch {
 			case bytes.Equal(data, []byte("CLOSE_WAIT")):
 				// server is ready for us to close (it ack'd our StartClose)
@@ -577,7 +579,27 @@ func (w *Worker) readLoop(c *nsqConn) {
 				// }
 				log.Printf("[%s] heartbeat received", c)
 			}
-		case client.FrameTypeError:
+		case FrameTypeAck:
+			log.Printf("[%s] ack receive %s", c, data)
+			params := bytes.Split(data, separatorBytes)
+			ackType, err := strconv.ParseInt(string(params[0]), 10, 64)
+			clientId, err := strconv.ParseInt(string(params[1]), 10, 64)
+			msgId, err := strconv.ParseInt(string(params[1]), 10, 64)
+			if err != nil {
+				log.Printf("ERROR: parse msgId error %s", err)
+				break
+			}
+
+			if ackType != int64(ACK_SUCCESS) {
+				model.SaveOfflineMessage(fmt.Sprintf("%d", clientId), msgId)
+				model.IncrMsgErrCount(msgId, 1)
+				model.IncrClientErrCount(clientId, 1)
+			} else {
+				model.IncrMsgOKCount(msgId, 1)
+				model.IncrClientOKCount(clientId, 1)
+			}
+
+		case FrameTypeError:
 			log.Printf("[%s] error from nsqd %s", c, data)
 		default:
 			log.Printf("[%s] unknown message type %d", c, frameType)

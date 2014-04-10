@@ -32,7 +32,7 @@ func main() {
 
 func wrapperFunc() {
 	defer func() {
-		fmt.Printf("warp func done !")
+		fmt.Println("warp func done !")
 	}()
 	go createClient()
 

@@ -121,3 +121,55 @@ func GetOfflineMessages(clientID string) (messageIDs []int64, err error) {
 	}
 	return messageIDs, nil
 }
+
+func IncrMsgOKCount(messageID int64, delta int) (reply int, err error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	key := fmt.Sprintf("m:ok:%d", messageID)
+	reply, err = redis.Int(conn.Do("INCRBY", key, delta))
+	if err != nil {
+		return -1, err
+	}
+	log.Printf("INFO: IncrMsgOKCount key %s reply %d", key, reply)
+	return reply, err
+}
+
+func IncrMsgErrCount(messageID int64, delta int) (reply int, err error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	key := fmt.Sprintf("m:err:%d", messageID)
+	reply, err = redis.Int(conn.Do("INCRBY", key, delta))
+	if err != nil {
+		return -1, err
+	}
+	log.Printf("INFO: IncrMsgErrCount key %s reply %d", key, reply)
+	return reply, err
+}
+
+func IncrClientOKCount(clientID int64, delta int) (reply int, err error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	key := fmt.Sprintf("c:ok:%d", clientID)
+	reply, err = redis.Int(conn.Do("INCRBY", key, delta))
+	if err != nil {
+		return -1, err
+	}
+	log.Printf("INFO: IncrClientOKCount key %s reply %d", key, reply)
+	return reply, err
+}
+
+func IncrClientErrCount(clientID int64, delta int) (reply int, err error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	key := fmt.Sprintf("c:err:%d", clientID)
+	reply, err = redis.Int(conn.Do("INCRBY", key, delta))
+	if err != nil {
+		return -1, err
+	}
+	log.Printf("INFO: IncrClientErrCount key %s reply %d", key, reply)
+	return reply, err
+}

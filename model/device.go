@@ -3,6 +3,7 @@ package model
 import (
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
+	"time"
 )
 
 type Device struct {
@@ -45,5 +46,27 @@ func SaveDevice(device *Device) (err error) {
 		return fn
 	}
 	err = withCollection("devices", insert)
+	return err
+}
+
+func TouchDeviceOnline(deviceID int64) (err error) {
+	update := func(c *mgo.Collection) error {
+		q := bson.M{"_id": deviceID}
+		m := bson.M{"$set": bson.M{"online_timestamp": time.Now().UnixNano()}}
+		fn := c.Update(q, m)
+		return fn
+	}
+	err = withCollection("devices", update)
+	return err
+}
+
+func TouchDeviceOffline(deviceID int64) (err error) {
+	update := func(c *mgo.Collection) error {
+		q := bson.M{"_id": deviceID}
+		m := bson.M{"$set": bson.M{"offline_timestamp": time.Now().UnixNano()}}
+		fn := c.Update(q, m)
+		return fn
+	}
+	err = withCollection("devices", update)
 	return err
 }

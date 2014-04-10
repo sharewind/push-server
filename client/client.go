@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/broker"
-	"code.sohuno.com/kzapp/push-server/util"
+	. "code.sohuno.com/kzapp/push-server/util"
 )
 
 // Writer is a high-level type to publish to NSQ.
@@ -166,7 +166,7 @@ func (c *Client) Register(addr string) error {
 	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%d&device_type=3&device_name=搜狐Android测试机%d", addr, time.Now().UnixNano(), time.Now().Unix())
 	log.Printf("LOOKUPD: querying %s", endpoint)
 
-	data, err := util.ApiRequest(endpoint)
+	data, err := ApiRequest(endpoint)
 	if err != nil {
 		log.Printf("ERROR: Register %s - %s", addr, err.Error())
 		return err

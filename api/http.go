@@ -101,7 +101,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 
 	if err == nil && deviceID != 0 {
 		device, err = model.FindDeviceByID(deviceID)
-		log.Printf("INFO: FindDeviceByID %s result %#v", deviceID, device)
+		log.Printf("INFO: FindDeviceByID %d result %#v", deviceID, device)
 
 		if err != nil || device == nil {
 			log.Printf("ERROR: FindDeviceByID error %s", err)
@@ -126,6 +126,8 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 			util.ApiResponse(w, 500, "INTERNAL_ERROR", nil)
 			return
 		}
+	} else {
+
 	}
 	data := make(map[string]interface{})
 	data["broker"] = "b1.zhan.sohu.com"

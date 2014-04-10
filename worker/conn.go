@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/client"
+	. "code.sohuno.com/kzapp/push-server/util"
 	"github.com/mreiferson/go-snappystream"
 )
 
@@ -84,7 +85,7 @@ func newNSQConn(rdyChan chan *nsqConn, addr string,
 		drainReady: make(chan int),
 	}
 
-	_, err = nc.Write(client.MagicV2)
+	_, err = nc.Write(MagicV2)
 	if err != nil {
 		nc.Close()
 		return nil, fmt.Errorf("[%s] failed to write magic - %s", addr, err.Error())
@@ -133,11 +134,11 @@ func (c *nsqConn) sendCommand(buf *bytes.Buffer, cmd *client.Command) error {
 }
 
 func (c *nsqConn) readUnpackedResponse() (int32, []byte, error) {
-	resp, err := client.ReadResponse(c)
+	resp, err := ReadResponse(c)
 	if err != nil {
 		return -1, nil, err
 	}
-	return client.UnpackResponse(resp)
+	return UnpackResponse(resp)
 }
 
 func (c *nsqConn) upgradeTLS(conf *tls.Config) error {
@@ -152,7 +153,7 @@ func (c *nsqConn) upgradeTLS(conf *tls.Config) error {
 	if err != nil {
 		return err
 	}
-	if frameType != client.FrameTypeResponse || !bytes.Equal(data, []byte("OK")) {
+	if frameType != FrameTypeResponse || !bytes.Equal(data, []byte("OK")) {
 		return errors.New("invalid response from TLS upgrade")
 	}
 	return nil
@@ -171,7 +172,7 @@ func (c *nsqConn) upgradeDeflate(level int) error {
 	if err != nil {
 		return err
 	}
-	if frameType != client.FrameTypeResponse || !bytes.Equal(data, []byte("OK")) {
+	if frameType != FrameTypeResponse || !bytes.Equal(data, []byte("OK")) {
 		return errors.New("invalid response from Deflate upgrade")
 	}
 	return nil
@@ -188,7 +189,7 @@ func (c *nsqConn) upgradeSnappy() error {
 	if err != nil {
 		return err
 	}
-	if frameType != client.FrameTypeResponse || !bytes.Equal(data, []byte("OK")) {
+	if frameType != FrameTypeResponse || !bytes.Equal(data, []byte("OK")) {
 		return errors.New("invalid response from Snappy upgrade")
 	}
 	return nil

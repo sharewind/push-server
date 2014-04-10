@@ -63,6 +63,16 @@ const (
 	FrameTypeError int32 = 1
 	// when it's a serialized message
 	FrameTypeMessage int32 = 2
+	// when ack a put message success/failure
+	FrameTypeAck int32 = 3
+)
+
+const (
+	ACK_SUCCESS int32 = 1
+
+	ACK_OFF int32 = 2
+
+	ACT_ERR int32 = 3
 )
 
 // The amount of time nsqd will allow a client to idle, can be overriden

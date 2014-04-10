@@ -98,7 +98,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		if response != nil {
 			err = p.Send(client, util.FrameTypeResponse, response)
 			if err != nil {
-				fmt.Printf("ERROR: send response to client error %s ", err)
+				log.Printf("ERROR: send response to client error %s ", err)
 				break
 			}
 		}
@@ -113,6 +113,11 @@ func (p *protocol) cleanupClientConn(client *client) {
 	client.Close()
 	model.DelClientConn(client.ClientID)
 	p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
+
+	client_id, _ := strconv.ParseInt(client.ClientID, 10, 64)
+	// touch devie online
+	model.TouchDeviceOffline(client_id)
+
 	close(client.ExitChan)
 	// if client.Channel != nil {
 	// 	client.Channel.RemoveClient(client.ID)
@@ -371,6 +376,9 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	p.context.broker.AddClient(client.ClientID, str_channel_id, client)
 	log.Printf("INFO: clientId %d sub channel %s success ", client.ClientID, channel_id)
 
+	// touch devie online
+	model.TouchDeviceOnline(client_id)
+
 	// should send client connected eventsf
 	log.Printf("INFO: SetClientConn clientID=%s, broker_addr=%s", client.ClientID, client.LocalAddr().String())
 	err = model.SetClientConn(client.ClientID, client.LocalAddr().String())
@@ -522,9 +530,10 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	// TODO 另外启动一个channel 与 goroutine 用来处理这个消息
 	dstClient, err := p.context.broker.GetClient(client_id, channel_id)
 	if err != nil || dstClient == nil {
-		model.SaveOfflineMessage(dstClient.ClientID, msgId)
+		p.ackPublish(client, util.ACK_OFF, client_id, msgId)
+		// model.SaveOfflineMessage(dstClient.ClientID, msgId)
 		log.Printf("client %s is null", client_id)
-		return okBytes, nil
+		return nil, nil
 		//return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")
 		// 	return FrameTypeACKError message_id
 	}
@@ -546,7 +555,22 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	err = dstClient.Flush()
 	dstClient.Unlock()
 
-	return okBytes, nil
+	if err != nil {
+		p.ackPublish(client, util.ACT_ERR, client_id, msgId)
+	} else {
+		p.ackPublish(client, util.ACK_SUCCESS, client_id, msgId)
+	}
+	return nil, nil
+}
+
+func (p *protocol) ackPublish(client *client, ackType int32, clientID string, msgID int64) (err error) {
+	response := []byte(fmt.Sprintf("%d %s %d", ackType, clientID, msgID))
+	err = p.Send(client, util.FrameTypeAck, response)
+	if err != nil {
+		log.Printf("ERROR: send response to client error %s ", err)
+		p.cleanupClientConn(client)
+	}
+	return err
 }
 
 func readLen(r io.Reader, tmp []byte) (int32, error) {
