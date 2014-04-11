@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	// "fmt"
-	// "log"
+	// "github.com/op/go-logging"
 	"os"
 	"os/signal"
 	"syscall"

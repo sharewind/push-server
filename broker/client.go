@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mreiferson/go-snappystream"
-	// "log"
+	// "github.com/op/go-logging"
 	"net"
 	"sync"
 	"sync/atomic"

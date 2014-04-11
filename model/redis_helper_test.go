@@ -2,7 +2,7 @@ package model
 
 import (
 	// "fmt"
-	// "log"
+	// "github.com/op/go-logging"
 	"testing"
 	// "time"
 
