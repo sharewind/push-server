@@ -70,3 +70,13 @@ func TouchDeviceOffline(deviceID int64) (err error) {
 	err = withCollection("devices", update)
 	return err
 }
+
+func ListDevice() (result *[]Device, err error) {
+	result = &[]Device{}
+	query := func(c *mgo.Collection) error {
+		fn := c.Find(nil).Skip(0).Limit(10).All(result)
+		return fn
+	}
+	err = withCollection("devices", query)
+	return result, err
+}

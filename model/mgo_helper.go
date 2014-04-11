@@ -6,7 +6,7 @@ import (
 
 var (
 	mgoSession     *mgo.Session
-	databaseServer = "localhost"
+	databaseServer = "10.10.69.191:27017"
 	databaseName   = "push"
 )
 

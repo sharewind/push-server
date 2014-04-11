@@ -67,7 +67,7 @@ func NewClient(addr string, id int64) *Client {
 
 		// can be overriden before connecting
 		Addr:              addr,
-		WriteTimeout:      time.Second,
+		WriteTimeout:      5 * time.Second,
 		HeartbeatInterval: DefaultClientTimeout / 2,
 		ShortIdentifier:   strings.Split(hostname, ".")[0],
 		LongIdentifier:    hostname,
@@ -170,7 +170,7 @@ func (c *Client) Register(addr string) error {
 
 	data, err := ApiRequest(endpoint)
 	if err != nil {
-		log.Debug("ERROR: Register %s - %s", addr, err.Error())
+		log.Debug("ERROR: Register %s - %s - %s", addr, err.Error(), data)
 		return err
 	}
 

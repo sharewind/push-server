@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -9,10 +10,12 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/admin/templates"
+	"code.sohuno.com/kzapp/push-server/model"
 	"code.sohuno.com/kzapp/push-server/util"
 	"code.sohuno.com/kzapp/push-server/util/lookupd"
 	"github.com/bitly/go-nsq"
@@ -83,6 +86,18 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	switch req.URL.Path {
+	case "/message":
+		s.messageHandler(w, req)
+
+	case "/message_list":
+		s.messageListHandler(w, req)
+	case "/channel_list":
+		s.channelListHandler(w, req)
+	case "/device_list":
+		s.deviceListHandler(w, req)
+	case "/sub_list":
+		s.subListHandler(w, req)
+
 	case "/":
 		s.indexHandler(w, req)
 	case "/ping":
@@ -127,6 +142,86 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		log.Debug("ERROR: 404 %s", req.URL.Path)
 		http.NotFound(w, req)
 	}
+}
+
+func (s *httpServer) messageHandler(w http.ResponseWriter, req *http.Request) {
+	reqParams, err := util.NewReqParams(req)
+	if err != nil {
+		log.Debug("ERROR: failed to parse request params - %s", err.Error())
+		http.Error(w, "INVALID_REQUEST", 500)
+		return
+	}
+	ID, err := reqParams.Get("ID")
+	if err != nil {
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	id, _ := strconv.ParseInt(ID, 0, 64)
+	result, err := model.FindMessageByID(id)
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r, _ := json.Marshal(result)
+	io.WriteString(w, string(r))
+}
+
+func (s *httpServer) messageListHandler(w http.ResponseWriter, req *http.Request) {
+	result, err := model.ListMessage()
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r, err := json.Marshal(result)
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	log.Info(string(r))
+	io.WriteString(w, string(r))
+}
+
+func (s *httpServer) channelListHandler(w http.ResponseWriter, req *http.Request) {
+	result, err := model.ListChannel()
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r, _ := json.Marshal(result)
+	io.WriteString(w, string(r))
+}
+
+func (s *httpServer) deviceListHandler(w http.ResponseWriter, req *http.Request) {
+	result, err := model.ListDevice()
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r, _ := json.Marshal(result)
+	io.WriteString(w, string(r))
+}
+
+func (s *httpServer) subListHandler(w http.ResponseWriter, req *http.Request) {
+	result, err := model.ListSubscribe()
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r, _ := json.Marshal(result)
+	io.WriteString(w, string(r))
 }
 
 func (s *httpServer) pingHandler(w http.ResponseWriter, req *http.Request) {

@@ -16,7 +16,7 @@ func main() {
 
 	for i := 0; i < 10000; i++ {
 		go wrapperFunc()
-		fmt.Println(i)
+		fmt.Println("connection: ", i)
 		// runtime.Gosched()
 		time.Sleep(1 * time.Millisecond)
 
@@ -43,6 +43,8 @@ func wrapperFunc() {
 
 }
 
+var count = 0
+
 func createClient() {
 	defer func() {
 		fmt.Println("createClient func done !")
@@ -51,9 +53,22 @@ func createClient() {
 
 	client_id := int64(451294706224070657)
 	c := client.NewClient(addr, client_id)
-	c.Register("10.2.58.178:4171")
-	c.Connect()
-
+	err := c.Register("10.2.58.178:4171")
+	if err != nil {
+		fmt.Println("error1:", err.Error())
+		count++
+		fmt.Println("timeoutcount ", count)
+		return
+	}
+	err = c.Connect()
+	if err != nil {
+		fmt.Println("error2:", err.Error())
+		return
+	}
 	channel_id := int64(1001)
-	c.Subscribe(channel_id)
+	err = c.Subscribe(channel_id)
+	if err != nil {
+		fmt.Println("error3:", err.Error())
+		return
+	}
 }

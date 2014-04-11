@@ -38,3 +38,13 @@ func SaveChannel(channel *Channel) (err error) {
 func IncreaseChannelMessageCount(ID int64, delta int) {
 
 }
+
+func ListChannel() (result *[]Channel, err error) {
+	result = &[]Channel{}
+	query := func(c *mgo.Collection) error {
+		fn := c.Find(nil).Skip(0).Limit(10).All(result)
+		return fn
+	}
+	err = withCollection("channels", query)
+	return result, err
+}
