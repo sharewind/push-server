@@ -285,7 +285,7 @@ func (c *Client) readLoop() {
 				// (but we can still write back responses)
 				log.Printf("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
 				atomic.StoreInt32(&c.stopFlag, 1)
-			case bytes.Equal(data, []byte("HT")):
+			case bytes.Equal(data, []byte("H")):
 				// var buf bytes.Buffer
 				log.Printf("[%s] heartbeat received", c)
 				// err := c.sendCommand(&buf, Nop())

@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
+	// "time"
 )
 
 func main() {
@@ -14,7 +14,7 @@ func main() {
 
 	for i := 0; i < 10000; i++ {
 		go wrapperFunc()
-		time.Sleep(20 * time.Millisecond)
+		// time.Sleep(10 * time.Millisecond)
 	}
 
 	exitChan := make(chan int)

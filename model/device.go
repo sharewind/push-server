@@ -3,6 +3,7 @@ package model
 import (
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
+	"log"
 	"time"
 )
 
@@ -27,6 +28,7 @@ func FindDeviceIDBySerialNO(serialNO string) (ID int64, err error) {
 	if err == nil && result != nil {
 		return result.ID, err
 	}
+	log.Printf("ERROR: FindDeviceIDBySerialNO %s", err)
 	return
 }
 
@@ -37,6 +39,9 @@ func FindDeviceByID(ID int64) (result *Device, err error) {
 		return fn
 	}
 	err = withCollection("devices", query)
+	if err != nil {
+		log.Printf("ERROR: FindDeviceByID %s", err)
+	}
 	return result, err
 }
 

@@ -9,7 +9,7 @@ import (
 	// "net"
 	"net/http"
 	"net/url"
-	"strconv"
+	// "strconv"
 	// "strings"
 	"time"
 
@@ -89,11 +89,11 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	device_name := reqParams.Get("device_name")
-	device_type, err := strconv.ParseInt(reqParams.Get("device_type"), 10, 8)
-	if device_type != model.Android {
-		util.ApiResponse(w, 400, "INVALID_DEVICE_TYPE", nil)
-		return
-	}
+	// device_type, err := strconv.ParseInt(reqParams.Get("device_type"), 10, 8)
+	// if device_type != model.Android {
+	// 	util.ApiResponse(w, 400, "INVALID_DEVICE_TYPE", nil)
+	// 	return
+	// }
 
 	var device *model.Device = nil
 	deviceID, err := model.FindDeviceIDBySerialNO(serial_no)
@@ -101,7 +101,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 
 	if err == nil && deviceID != 0 {
 		device, err = model.FindDeviceByID(deviceID)
-		log.Printf("INFO: FindDeviceByID %d result %#v", deviceID, device)
+		// log.Printf("INFO: FindDeviceByID %d result %#v", deviceID, device)
 
 		if err != nil || device == nil {
 			log.Printf("ERROR: FindDeviceByID error %s", err)
@@ -110,13 +110,13 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	log.Printf("INFO: exist_device %#v", device)
+	// log.Printf("INFO: exist_device %#v", device)
 	if device == nil {
 		device = &model.Device{
 			ID:              <-s.context.api.idChan,
 			SerialNO:        serial_no,
 			DeviceName:      device_name,
-			DeviceType:      int8(device_type),
+			DeviceType:      int8(3), //int8(device_type),
 			CreatedAt:       time.Now().UnixNano(),
 			OnlineTimestamp: time.Now().UnixNano(),
 		}
@@ -132,5 +132,6 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	data := make(map[string]interface{})
 	data["broker"] = "b1.zhan.sohu.com"
 	data["device_id"] = device.ID
+	log.Printf("INFO: regiest success %s", serial_no)
 	util.ApiResponse(w, 200, "OK", data)
 }

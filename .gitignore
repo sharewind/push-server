@@ -1,8 +1,11 @@
 build
 apps/broker/broker
 apps/client/client
+apps/client/main
+apps/client/bench_client
 apps/worker/worker
 apps/api/api
+apps/*/*.log
 dist
 _site
 _posts

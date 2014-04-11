@@ -3,6 +3,7 @@ package model
 import (
 	"labix.org/v2/mgo"
 	// "labix.org/v2/mgo/bson"
+	"log"
 )
 
 //TODO need count success/failure
@@ -23,6 +24,9 @@ func FindChannelByID(ID int64) (result *Channel, err error) {
 		return fn
 	}
 	err = withCollection("channels", query)
+	if err != nil {
+		log.Printf("ERROR: FindChannelByID %s", err)
+	}
 	return result, err
 }
 

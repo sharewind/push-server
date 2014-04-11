@@ -9,7 +9,7 @@ import (
 
 var (
 	redisPool   *redis.Pool
-	redisServer string = "localhost:6379" // host:port of server
+	redisServer string = "10.10.79.123:15151" // host:port of server
 	password    string
 )
 

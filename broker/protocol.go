@@ -49,7 +49,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 	// <-messagePumpStartedChan
 
 	for {
-		log.Printf("INFO: client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
+		// log.Printf("INFO: client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
 		if client.HeartbeatInterval > 0 {
 			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2))
 		} else {
@@ -167,8 +167,8 @@ func (p *protocol) Send(client *client, frameType int32, data []byte) error {
 
 func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
 	switch {
-	case bytes.Equal(params[0], []byte("HT")):
-		return p.HT(client, params)
+	case bytes.Equal(params[0], []byte("H")):
+		return p.HEARTBEAT(client, params)
 	case bytes.Equal(params[0], []byte("FIN")):
 		return p.FIN(client, params)
 	// case bytes.Equal(params[0], []byte("RDY")):
@@ -348,6 +348,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	client_id, err := strconv.ParseInt(client.ClientID, 10, 64)
 	if err != nil {
+		log.Printf("invalid client id [%s] err: %s", client.ClientID, err)
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
 	}
 
@@ -357,6 +358,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	device, err := model.FindDeviceByID(client_id)
 	if err != nil || device == nil {
+		log.Printf("invalid client id [%d] err: %s", client_id, err)
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
 	}
 
@@ -453,9 +455,9 @@ func (p *protocol) checkOfflineMessage(client *client) {
 }
 
 // hearbeat
-func (p *protocol) HT(client *client, params [][]byte) ([]byte, error) {
-	log.Printf("[%s] heartbeat received", client)
-	return []byte("HT"), nil
+func (p *protocol) HEARTBEAT(client *client, params [][]byte) ([]byte, error) {
+	// log.Printf("[%s] heartbeat received", client)
+	return []byte("H"), nil
 }
 
 func (p *protocol) FIN(client *client, params [][]byte) ([]byte, error) {
