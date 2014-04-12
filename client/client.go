@@ -109,7 +109,7 @@ func (c *Client) Connect() error {
 	c.Conn = conn
 
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
-	_, err = c.Write(MagicV2)
+	_, err = c.Write(MagicV1)
 	if err != nil {
 		log.Debug("ERROR: [%s] failed to write magic - %s", c, err)
 		c.Close()
