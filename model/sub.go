@@ -77,3 +77,13 @@ func ListSubscribe() (result *[]Subscribe, err error) {
 	err = withCollection("subs", query)
 	return result, err
 }
+
+func CountSubscribe(channelId int64) (result int, err error) {
+	query := func(c *mgo.Collection) error {
+		var fn error
+		result, fn = c.Find(bson.M{"channel_id": channelId}).Count()
+		return fn
+	}
+	err = withCollection("subs", query)
+	return result, err
+}

@@ -97,6 +97,8 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.deviceListHandler(w, req)
 	case "/sub_list":
 		s.subListHandler(w, req)
+	case "/sub_count":
+		s.subCountHandler(w, req)
 
 	// case "/":
 	// 	s.indexHandler(w, req)
@@ -178,41 +180,47 @@ func (s *httpServer) messageListHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 	channelId, err := reqParams.Get("channel_id")
-	if err == nil {
-		channelId, err := strconv.ParseInt(channelId, 10, 64)
-		if err != nil {
-
-			log.Error(err.Error())
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		result, err := model.GetMessageByChannelId(channelId)
-		if err != nil {
-
-			log.Error(err.Error())
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		r, err := json.Marshal(result)
-		io.WriteString(w, string(r))
+	if err != nil {
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
 		return
 	}
-
-	result, err := model.ListMessage()
+	id, err := strconv.ParseInt(channelId, 10, 64)
 	if err != nil {
 
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	result, err := model.GetMessageByChannelId(id)
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	for _, m := range *result {
+		m.OK, m.Err, err = model.GetMsgOKErrCount(m.ID)
 	}
 	r, err := json.Marshal(result)
-	if err != nil {
-
-		log.Error(err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
 	io.WriteString(w, string(r))
+	return
+
+	// result, err := model.ListMessage()
+	// if err != nil {
+
+	// 	log.Error(err.Error())
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
+	// r, err := json.Marshal(result)
+	// if err != nil {
+
+	// 	log.Error(err.Error())
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
+	// io.WriteString(w, string(r))
 }
 
 func (s *httpServer) channelListHandler(w http.ResponseWriter, req *http.Request) {
@@ -241,6 +249,21 @@ func (s *httpServer) deviceListHandler(w http.ResponseWriter, req *http.Request)
 
 func (s *httpServer) subListHandler(w http.ResponseWriter, req *http.Request) {
 	result, err := model.ListSubscribe()
+	if err != nil {
+
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r, _ := json.Marshal(result)
+	io.WriteString(w, string(r))
+}
+
+func (s *httpServer) subCountHandler(w http.ResponseWriter, req *http.Request) {
+	reqParams, _ := util.NewReqParams(req)
+	channelId, _ := reqParams.Get("channel_id")
+	id, _ := strconv.ParseInt(channelId, 10, 64)
+	result, err := model.CountSubscribe(id)
 	if err != nil {
 
 		log.Error(err.Error())
