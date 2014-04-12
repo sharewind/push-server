@@ -263,7 +263,7 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 	conn, ok := w.nsqConnections[broker_addr]
 	w.RUnlock()
 
-	log.Debug(" publish conn is %s", conn)
+	log.Debug(" publish conn %s is %s", broker_addr, conn)
 	if !ok {
 		log.Debug("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
 		//TODO save offline message
@@ -571,7 +571,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 				// (but we can still write back responses)
 				log.Debug("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
 				atomic.StoreInt32(&c.stopFlag, 1)
-			case bytes.Equal(data, []byte("HT")):
+			case bytes.Equal(data, []byte("H")):
 				// var buf bytes.Buffer
 				// err := c.sendCommand(&buf, Nop())
 				// if err != nil {

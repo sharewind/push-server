@@ -45,7 +45,7 @@ func NewDeadlineTransport(timeout time.Duration) *http.Transport {
 //
 //     {"status_code":200, "status_txt":"OK", "data":{...}}
 func ApiRequest(endpoint string) (*simplejson.Json, error) {
-	httpclient := &http.Client{Transport: NewDeadlineTransport(600 * time.Second)}
+	httpclient := &http.Client{Transport: NewDeadlineTransport(200 * time.Second)}
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err

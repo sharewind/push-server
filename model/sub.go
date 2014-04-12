@@ -7,11 +7,11 @@ import (
 )
 
 type Subscribe struct {
-	SubscribeID int64 `json:"Subscribe_id" bson:"Subscribe_id"`
-	DeviceID    int64 `json:"device_id" bson:"device_id"`
-	DeviceType  int8  `json:"device_type" bson:"device_type"`
-	CreatedAt   int64 `json:"created_at" bson:"created_at"`
-	UpdatedAt   int64 `json:"updated_at" bson:"updated_at"`
+	ChannelID  int64 `json:"channel_id" bson:"channel_id"`
+	DeviceID   int64 `json:"device_id" bson:"device_id"`
+	DeviceType int8  `json:"device_type" bson:"device_type"`
+	CreatedAt  int64 `json:"created_at" bson:"created_at"`
+	UpdatedAt  int64 `json:"updated_at" bson:"updated_at"`
 }
 
 func SaveSubscribe(sub *Subscribe) (err error) {
@@ -34,11 +34,11 @@ func FindSubscribeByDeviceID(SubscribeID int64, deviceID int64) (result *Subscri
 }
 
 func SaveOrUpdateSubscribe(sub *Subscribe) (err error) {
-	exist, err := FindSubscribeByDeviceID(sub.SubscribeID, sub.DeviceID)
+	exist, err := FindSubscribeByDeviceID(sub.ChannelID, sub.DeviceID)
 	log.Debug(" exist sub %#v , err %s", exist, err)
 	if err == nil && exist != nil {
 		update := func(c *mgo.Collection) error {
-			q := bson.M{"Subscribe_id": sub.SubscribeID, "device_id": sub.DeviceID}
+			q := bson.M{"Subscribe_id": sub.ChannelID, "device_id": sub.DeviceID}
 			m := bson.M{"$set": bson.M{"updated_at": time.Now().UnixNano()}}
 			fn := c.Update(q, m)
 			return fn

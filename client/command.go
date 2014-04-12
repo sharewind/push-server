@@ -196,5 +196,5 @@ func Nop() *Command {
 }
 
 func HeartBeat() *Command {
-	return &Command{[]byte("HT"), nil, nil}
+	return &Command{[]byte("H"), nil, nil}
 }

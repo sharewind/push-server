@@ -2,7 +2,7 @@ package model
 
 import (
 	"labix.org/v2/mgo"
-	// "labix.org/v2/mgo/bson"
+	"labix.org/v2/mgo/bson"
 )
 
 type Message struct {
@@ -14,7 +14,7 @@ type Message struct {
 	Expires    int64  `json:"expires" bson:"expires"`
 	DeviceType int8   `json:"device_type" bson:"device_type"`
 	PushType   int8   `json:"push_type" bson:"push_type"`
-	MessageID  int64  `json:"Message_id" bson:"Message_id"`
+	ChannelID  int64  `json:"channel_id" bson:"channel_id"`
 	DeviceID   int64  `json:"device_id" bson:"device_id"`
 }
 
@@ -41,6 +41,17 @@ func ListMessage() (result *[]Message, err error) {
 	result = &[]Message{}
 	query := func(c *mgo.Collection) error {
 		fn := c.Find(nil).Skip(0).Limit(10).All(result)
+		return fn
+	}
+	err = withCollection("messages", query)
+	return result, err
+}
+
+func GetMessageByChannelId(channelId int64) (result *[]Message, err error) {
+	log.Debug("GetMessageByChannelId")
+	result = &[]Message{}
+	query := func(c *mgo.Collection) error {
+		fn := c.Find(bson.M{"channel_id": channelId}).Skip(0).Limit(10).All(result)
 		return fn
 	}
 	err = withCollection("messages", query)

@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-	"time"
+	// "time"
 )
 
 func main() {
@@ -15,11 +15,15 @@ func main() {
 	fmt.Println("client start!")
 
 	for i := 0; i < 10000; i++ {
+<<<<<<< HEAD
 		go wrapperFunc()
 		fmt.Println("connection: ", i)
+=======
+		go createClient()
+		fmt.Println(i)
+>>>>>>> 96f3fffc95d61df0a52ed811283a5221e71e8106
 		// runtime.Gosched()
 		time.Sleep(1 * time.Millisecond)
-
 	}
 
 	exitChan := make(chan int)
@@ -35,6 +39,7 @@ func main() {
 
 }
 
+<<<<<<< HEAD
 func wrapperFunc() {
 	defer func() {
 		fmt.Println("warp func done !")
@@ -45,6 +50,8 @@ func wrapperFunc() {
 
 var count = 0
 
+=======
+>>>>>>> 96f3fffc95d61df0a52ed811283a5221e71e8106
 func createClient() {
 	defer func() {
 		fmt.Println("createClient func done !")
