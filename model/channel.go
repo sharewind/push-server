@@ -51,3 +51,27 @@ func ListChannel() (result *[]Channel, err error) {
 	err = withCollection("channels", query)
 	return result, err
 }
+
+func CountChannel() (result int, err error) {
+	query := func(c *mgo.Collection) error {
+		var fn error
+		result, fn = c.Find(nil).Count()
+		return fn
+	}
+	err = withCollection("channels", query)
+	return result, err
+}
+
+// func IsValidChannel(channelId int64) (valid bool) {
+// 	query := func(c *mgo.Collection) error {
+// 		result, fn := c.FindId(channelId).Count()
+// 		if result <= 0 {
+// 			valid = false
+// 		} else {
+// 			valid = true
+// 		}
+// 		return fn
+// 	}
+// 	err = withCollection("channels", query)
+// 	return valid, err
+// }

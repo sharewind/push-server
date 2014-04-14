@@ -78,10 +78,40 @@ func ListSubscribe() (result *[]Subscribe, err error) {
 	return result, err
 }
 
-func CountSubscribe(channelId int64) (result int, err error) {
+func CountSubscribe(channelId int64, deviceType int8) (result int, err error) {
 	query := func(c *mgo.Collection) error {
 		var fn error
-		result, fn = c.Find(bson.M{"channel_id": channelId}).Count()
+		result, fn = c.Find(bson.M{}).Count()
+		return fn
+	}
+	err = withCollection("subs", query)
+	return result, err
+}
+
+func CountSubscribeByChannelId(channelId int64, deviceType int8) (result int, err error) {
+	if deviceType == -1 {
+		query := func(c *mgo.Collection) error {
+			var fn error
+			result, fn = c.Find(bson.M{"channel_id": channelId}).Count()
+			return fn
+		}
+		err = withCollection("subs", query)
+		return result, err
+	}
+	query := func(c *mgo.Collection) error {
+		var fn error
+		result, fn = c.Find(bson.M{"channel_id": channelId, "device_type": deviceType}).Count()
+		return fn
+	}
+	err = withCollection("subs", query)
+	return result, err
+}
+
+func GetSubscribeByChannelId(channelId int64) (result *[]Subscribe, err error) {
+	log.Debug("GetMessageByChannelId")
+	result = &[]Subscribe{}
+	query := func(c *mgo.Collection) error {
+		fn := c.Find(bson.M{"channel_id": channelId}).Skip(0).Limit(10).All(result)
 		return fn
 	}
 	err = withCollection("subs", query)

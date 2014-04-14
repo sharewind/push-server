@@ -59,3 +59,33 @@ func GetMessageByChannelId(channelId int64) (result *[]Message, err error) {
 	err = withCollection("messages", query)
 	return result, err
 }
+
+func GetMessageByDeviceId(deviceId int64) (result *[]Message, err error) {
+	result = &[]Message{}
+	query := func(c *mgo.Collection) error {
+		fn := c.Find(bson.M{"device_id": deviceId}).Skip(0).Limit(10).All(result)
+		return fn
+	}
+	err = withCollection("messages", query)
+	return result, err
+}
+
+func CountMessageByChannelId(channelId int64) (result int, err error) {
+	query := func(c *mgo.Collection) error {
+		var fn error
+		result, fn = c.Find(bson.M{"channel_id": channelId}).Count()
+		return fn
+	}
+	err = withCollection("messages", query)
+	return result, err
+}
+
+func CountMessageByDeviceId(deviceId int64) (result int, err error) {
+	query := func(c *mgo.Collection) error {
+		var fn error
+		result, fn = c.Find(bson.M{"device_id": deviceId}).Count()
+		return fn
+	}
+	err = withCollection("messages", query)
+	return result, err
+}

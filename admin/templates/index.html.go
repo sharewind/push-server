@@ -2,29 +2,18 @@ package templates
 
 func init() {
 	registerTemplate("index.html", `
-{{template "header.html" .}}
-{{$g := .GraphOptions}}
 
 <div class="row-fluid"><div class="span12">
-<h2>Topics</h2>
+<h2>push</h2>
 </div></div>
 
 
 <div class="row-fluid"><div class="span6">
-{{if .Topics}}
+{{if .Channels}}
 <table class="table table-condensed table-bordered">
+{{range $c := .Channels}}
     <tr>
-        <th>Topic</th>
-        {{if $g.Enabled}}<th width="120">Depth</th>{{end}}
-        {{if $g.Enabled}}<th width="120">Messages</th>{{end}}
-        {{if $g.Enabled}}<th width="120">Rate</th>{{end}}
-    </tr>
-{{range $t := .Topics}}
-    <tr>
-        <td><a href="/topic/{{.TopicName}}">{{.TopicName}}</a></td>
-        {{if $g.Enabled}}<td><a href="/topic/{{.TopicName}}"><img width="120" height="20" src="{{$g.Sparkline $t "depth"}}"></a></td>{{end}}
-        {{if $g.Enabled}}<td><a href="/topic/{{.TopicName}}"><img width="120" height="20" src="{{$g.Sparkline $t "message_count"}}"></a></td>{{end}}
-        {{if $g.Enabled}}<td class="bold rate" target="{{$g.Rate $t}}"></td> {{end}}
+        <td><a href="/channel/{{.ID}}">{{.Name}}</a></td>
     </tr>
 {{end}}
 </table>
@@ -33,8 +22,6 @@ func init() {
 {{end}}
 
 </div></div>
-
 {{template "js.html" .}}
-{{template "footer.html" .}}
 `)
 }

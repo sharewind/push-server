@@ -2,16 +2,16 @@ package main
 
 import (
 	"encoding/json"
-	// "fmt"
+	"fmt"
 	"html/template"
 	"io"
 	// "io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	// "regexp"
+	"regexp"
 	"strconv"
-	// "strings"
+	"strings"
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/admin/templates"
@@ -80,10 +80,11 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// if strings.HasPrefix(req.URL.Path, "/node/") {
 	// 	s.nodeHandler(w, req)
 	// 	return
-	// } else if strings.HasPrefix(req.URL.Path, "/topic/") {
-	// 	s.topicHandler(w, req)
-	// 	return
-	// }
+	// } else
+	if strings.HasPrefix(req.URL.Path, "/channel/") {
+		s.channelHandler(w, req)
+		return
+	}
 
 	switch req.URL.Path {
 	case "/message":
@@ -100,8 +101,8 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/sub_count":
 		s.subCountHandler(w, req)
 
-	// case "/":
-	// 	s.indexHandler(w, req)
+	case "/":
+		s.indexHandler(w, req)
 	// case "/ping":
 	// 	s.pingHandler(w, req)
 	// case "/nodes":
@@ -263,7 +264,7 @@ func (s *httpServer) subCountHandler(w http.ResponseWriter, req *http.Request) {
 	reqParams, _ := util.NewReqParams(req)
 	channelId, _ := reqParams.Get("channel_id")
 	id, _ := strconv.ParseInt(channelId, 10, 64)
-	result, err := model.CountSubscribe(id)
+	result, err := model.CountSubscribe(id, 0)
 	if err != nil {
 
 		log.Error(err.Error())
@@ -279,114 +280,81 @@ func (s *httpServer) subCountHandler(w http.ResponseWriter, req *http.Request) {
 // 	io.WriteString(w, "OK")
 // }
 
-// func (s *httpServer) indexHandler(w http.ResponseWriter, req *http.Request) {
-// 	reqParams, err := util.NewReqParams(req)
-// 	if err != nil {
-// 		log.Debug("ERROR: failed to parse request params - %s", err.Error())
-// 		http.Error(w, "INVALID_REQUEST", 500)
-// 		return
-// 	}
+func (s *httpServer) indexHandler(w http.ResponseWriter, req *http.Request) {
+	channels, err := model.ListChannel()
 
-// 	var topics []string
-// 	if len(s.context.admin.options.NSQLookupdHTTPAddresses) != 0 {
-// 		topics, _ = lookupd.GetLookupdTopics(s.context.admin.options.NSQLookupdHTTPAddresses)
-// 	} else {
-// 		topics, _ = lookupd.GetNSQDTopics(s.context.admin.options.NSQDHTTPAddresses)
-// 	}
+	p := struct {
+		Title    string
+		Channels *[]model.Channel
+		Version  string
+	}{
+		Title:    "push",
+		Channels: channels,
+		Version:  util.BINARY_VERSION,
+	}
+	err = templates.T.ExecuteTemplate(w, "index.html", p)
+	if err != nil {
+		log.Debug("Template Error %s", err.Error())
+		http.Error(w, "Template Error", 500)
+	}
+}
 
-// 	p := struct {
-// 		Title        string
-// 		GraphOptions *GraphOptions
-// 		Topics       Topics
-// 		Version      string
-// 	}{
-// 		Title:        "NSQ",
-// 		GraphOptions: NewGraphOptions(w, req, reqParams, s.context),
-// 		Topics:       TopicsFromStrings(topics),
-// 		Version:      util.BINARY_VERSION,
-// 	}
-// 	err = templates.T.ExecuteTemplate(w, "index.html", p)
-// 	if err != nil {
-// 		log.Debug("Template Error %s", err.Error())
-// 		http.Error(w, "Template Error", 500)
-// 	}
-// }
+func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
+	var urlRegex = regexp.MustCompile(`^/channel/(.*)$`)
+	matches := urlRegex.FindStringSubmatch(req.URL.Path)
+	if len(matches) == 0 {
+		http.Error(w, "INVALID_CHANNEL", 500)
+		return
+	}
+	parts := strings.Split(matches[1], "/")
+	channelId, _ := strconv.ParseInt(parts[0], 10, 64)
+	channel, err := model.FindChannelByID(channelId)
+	if err != nil {
+		http.Error(w, "INVALID_CHANNEL", 500)
+		return
+	}
 
-// func (s *httpServer) topicHandler(w http.ResponseWriter, req *http.Request) {
-// 	var urlRegex = regexp.MustCompile(`^/topic/(.*)$`)
-// 	matches := urlRegex.FindStringSubmatch(req.URL.Path)
-// 	if len(matches) == 0 {
-// 		http.Error(w, "INVALID_TOPIC", 500)
-// 		return
-// 	}
-// 	parts := strings.Split(matches[1], "/")
-// 	topicName := parts[0]
-// 	if !nsq.IsValidTopicName(topicName) {
-// 		http.Error(w, "INVALID_TOPIC", 500)
-// 		return
-// 	}
-// 	if len(parts) == 2 {
-// 		channelName := parts[1]
-// 		if !nsq.IsValidChannelName(channelName) {
-// 			http.Error(w, "INVALID_CHANNEL", 500)
-// 		} else {
-// 			s.channelHandler(w, req, topicName, channelName)
-// 		}
-// 		return
-// 	}
+	messages, err := model.GetMessageByChannelId(channel.ID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
-// 	reqParams, err := util.NewReqParams(req)
-// 	if err != nil {
-// 		log.Debug("ERROR: failed to parse request params - %s", err.Error())
-// 		http.Error(w, "INVALID_REQUEST", 500)
-// 		return
-// 	}
+	subs, err := model.GetSubscribeByChannelId(channel.ID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
-// 	producers := s.getProducers(topicName)
-// 	topicStats, channelStats, _ := lookupd.GetNSQDStats(producers, topicName)
+	subCount := make(map[string]int)
+	subCount["all"], err = model.CountSubscribeByChannelId(channel.ID, -1)
+	subCount["android"], err = model.CountSubscribeByChannelId(channel.ID, 0)
+	subCount["ios"], err = model.CountSubscribeByChannelId(channel.ID, 1)
+	subCount["other"], err = model.CountSubscribeByChannelId(channel.ID, 2)
 
-// 	globalTopicStats := &lookupd.TopicStats{HostAddress: "Total"}
-// 	for _, t := range topicStats {
-// 		globalTopicStats.Add(t)
-// 	}
-
-// 	hasE2eLatency := globalTopicStats.E2eProcessingLatency != nil &&
-// 		len(globalTopicStats.E2eProcessingLatency.Percentiles) > 0
-
-// 	var firstTopic *lookupd.TopicStats
-// 	if len(topicStats) > 0 {
-// 		firstTopic = topicStats[0]
-// 	}
-
-// 	p := struct {
-// 		Title            string
-// 		GraphOptions     *GraphOptions
-// 		Version          string
-// 		Topic            string
-// 		TopicProducers   []string
-// 		TopicStats       []*lookupd.TopicStats
-// 		FirstTopic       *lookupd.TopicStats
-// 		GlobalTopicStats *lookupd.TopicStats
-// 		ChannelStats     map[string]*lookupd.ChannelStats
-// 		HasE2eLatency    bool
-// 	}{
-// 		Title:            fmt.Sprintf("NSQ %s", topicName),
-// 		GraphOptions:     NewGraphOptions(w, req, reqParams, s.context),
-// 		Version:          util.BINARY_VERSION,
-// 		Topic:            topicName,
-// 		TopicProducers:   producers,
-// 		TopicStats:       topicStats,
-// 		FirstTopic:       firstTopic,
-// 		GlobalTopicStats: globalTopicStats,
-// 		ChannelStats:     channelStats,
-// 		HasE2eLatency:    hasE2eLatency,
-// 	}
-// 	err = templates.T.ExecuteTemplate(w, "topic.html", p)
-// 	if err != nil {
-// 		log.Debug("Template Error %s", err.Error())
-// 		http.Error(w, "Template Error", 500)
-// 	}
-// }
+	p := struct {
+		Title      string
+		Version    string
+		Topic      string
+		Channel    *model.Channel
+		Messages   *[]model.Message
+		Subscribes *[]model.Subscribe
+		SubCount   map[string]int
+	}{
+		Title:      fmt.Sprintf("push %s", channel.Name),
+		Version:    util.BINARY_VERSION,
+		Topic:      channel.Name,
+		Channel:    channel,
+		Messages:   messages,
+		Subscribes: subs,
+		SubCount:   subCount,
+	}
+	err = templates.T.ExecuteTemplate(w, "channel.html", p)
+	if err != nil {
+		log.Debug("Template Error %s", err.Error())
+		http.Error(w, "Template Error", 500)
+	}
+}
 
 // func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request, topicName string, channelName string) {
 // 	reqParams, err := util.NewReqParams(req)
