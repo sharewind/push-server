@@ -117,3 +117,21 @@ func GetSubscribeByChannelId(channelId int64) (result *[]Subscribe, err error) {
 	err = withCollection("subs", query)
 	return result, err
 }
+
+func FindSubscribeByChannelID(channelID int64, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
+	results = []Subscribe{}
+	query := func(c *mgo.Collection) error {
+		q := bson.M{"channel_id": channelID}
+		if deviceType != ALLDevice {
+			q = bson.M{"channel_id": channelID, "device_type": deviceType}
+		}
+
+		fn := c.Find(q).Skip(skip).Limit(limit).All(&results)
+		if limit < 0 {
+			fn = c.Find(q).Skip(skip).All(&results)
+		}
+		return fn
+	}
+	err = withCollection("subs", query)
+	return results, err
+}

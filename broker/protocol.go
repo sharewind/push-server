@@ -347,7 +347,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	client_id, err := strconv.ParseInt(client.ClientID, 10, 64)
 	if err != nil {
-		log.Printf("invalid client id [%s] err: %s", client.ClientID, err)
+		log.Error("invalid client id [%s] err: %s", client.ClientID, err)
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
 	}
 
@@ -357,7 +357,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	device, err := model.FindDeviceByID(client_id)
 	if err != nil || device == nil {
-		log.Printf("invalid client id [%d] err: %s", client_id, err)
+		log.Error("invalid client id [%d] err: %s", client_id, err)
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
 	}
 

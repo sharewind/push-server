@@ -130,6 +130,6 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	data := make(map[string]interface{})
 	data["broker"] = "b1.zhan.sohu.com"
 	data["device_id"] = device.ID
-	log.Printf("INFO: regiest success %s", serial_no)
+	log.Info("INFO: regiest success %s", serial_no)
 	util.ApiResponse(w, 200, "OK", data)
 }
