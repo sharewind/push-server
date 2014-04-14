@@ -54,7 +54,8 @@ func SendFramedResponse(w io.Writer, frameType int32, data []byte) (int, error) 
 
 // copy from go-nsq protocol
 var MagicV1 = []byte("  V1")
-var MagicV2 = []byte("  V2")
+
+// var MagicV2 = []byte("  V2")
 
 const (
 	// when successful

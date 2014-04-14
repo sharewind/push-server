@@ -8,6 +8,7 @@ apps/api/api
 apps/admin/admin
 apps/*/*.log
 dist
+tags
 _site
 _posts
 *.dat
