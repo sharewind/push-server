@@ -89,7 +89,7 @@ func CountSubscribe(channelId int64, deviceType int8) (result int, err error) {
 }
 
 func CountSubscribeByChannelId(channelId int64, deviceType int8) (result int, err error) {
-	if deviceType == -1 {
+	if deviceType == ALLDevice {
 		query := func(c *mgo.Collection) error {
 			var fn error
 			result, fn = c.Find(bson.M{"channel_id": channelId}).Count()

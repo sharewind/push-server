@@ -10,8 +10,9 @@ const (
 	Browser      = 1
 	PC           = 2
 	Android      = 3
-	iOS          = 4
+	IOS          = 4
 	WindowsPhone = 5
+	Other        = 6
 )
 
 // Push Type
