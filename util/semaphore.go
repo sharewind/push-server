@@ -1,16 +1,12 @@
 package util
 
-import (
-	"log"
-)
-
 type Semaphore struct {
 	permits  int
 	syncChan chan int
 }
 
 func NewSemaphore(permits int) (s *Semaphore) {
-	log.Printf("NewSemaphore %d", permits)
+	log.Info("NewSemaphore %d", permits)
 	return &Semaphore{permits: permits, syncChan: make(chan int, permits)}
 }
 

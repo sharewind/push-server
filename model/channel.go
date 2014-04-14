@@ -3,7 +3,6 @@ package model
 import (
 	"labix.org/v2/mgo"
 	// "labix.org/v2/mgo/bson"
-	"log"
 )
 
 //TODO need count success/failure
@@ -25,7 +24,7 @@ func FindChannelByID(ID int64) (result *Channel, err error) {
 	}
 	err = withCollection("channels", query)
 	if err != nil {
-		log.Printf("ERROR: FindChannelByID %s", err)
+		log.Error("ERROR: FindChannelByID %s", err)
 	}
 	return result, err
 }
@@ -42,3 +41,37 @@ func SaveChannel(channel *Channel) (err error) {
 func IncreaseChannelMessageCount(ID int64, delta int) {
 
 }
+
+func ListChannel() (result *[]Channel, err error) {
+	result = &[]Channel{}
+	query := func(c *mgo.Collection) error {
+		fn := c.Find(nil).Skip(0).Limit(10).All(result)
+		return fn
+	}
+	err = withCollection("channels", query)
+	return result, err
+}
+
+func CountChannel() (result int, err error) {
+	query := func(c *mgo.Collection) error {
+		var fn error
+		result, fn = c.Find(nil).Count()
+		return fn
+	}
+	err = withCollection("channels", query)
+	return result, err
+}
+
+// func IsValidChannel(channelId int64) (valid bool) {
+// 	query := func(c *mgo.Collection) error {
+// 		result, fn := c.FindId(channelId).Count()
+// 		if result <= 0 {
+// 			valid = false
+// 		} else {
+// 			valid = true
+// 		}
+// 		return fn
+// 	}
+// 	err = withCollection("channels", query)
+// 	return valid, err
+// }

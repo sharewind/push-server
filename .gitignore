@@ -5,8 +5,10 @@ apps/client/main
 apps/client/bench_client
 apps/worker/worker
 apps/api/api
+apps/admin/admin
 apps/*/*.log
 dist
+tags
 _site
 _posts
 *.dat

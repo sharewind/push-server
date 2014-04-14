@@ -149,6 +149,26 @@ func IncrMsgErrCount(messageID int64, delta int) (reply int, err error) {
 	return reply, err
 }
 
+func GetMsgOKErrCount(messageID int64) (okCount int, errCount int, err error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	key := fmt.Sprintf("m:ok:%d", messageID)
+	okCount, err = redis.Int(conn.Do("get", key))
+	if err != nil {
+		return -1, -1, err
+	}
+	log.Debug("INFO: getMsgOKCount key %s reply %d", key, okCount)
+
+	key = fmt.Sprintf("m:err:%d", messageID)
+	errCount, err = redis.Int(conn.Do("get", key))
+	if err != nil {
+		return -1, -1, err
+	}
+	log.Debug("INFO: getMsgErrCount key %s reply %d", key, errCount)
+	return okCount, errCount, err
+}
+
 func IncrClientOKCount(clientID int64, delta int) (reply int, err error) {
 	conn := redisPool.Get()
 	defer conn.Close()
