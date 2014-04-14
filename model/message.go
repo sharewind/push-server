@@ -39,31 +39,31 @@ func SaveMessage(msg *Message) (err error) {
 	return err
 }
 
-func ListMessage() (result *[]Message, err error) {
+func ListMessage(skip int, limit int) (result *[]Message, err error) {
 	result = &[]Message{}
 	query := func(c *mgo.Collection) error {
-		fn := c.Find(nil).Skip(0).Limit(10).All(result)
+		fn := c.Find(nil).Skip(skip).Limit(limit).All(result)
 		return fn
 	}
 	err = withCollection("messages", query)
 	return result, err
 }
 
-func GetMessageByChannelId(channelId int64) (result *[]Message, err error) {
+func GetMessageByChannelId(channelId int64, skip int, limit int) (result *[]Message, err error) {
 	log.Debug("GetMessageByChannelId")
 	result = &[]Message{}
 	query := func(c *mgo.Collection) error {
-		fn := c.Find(bson.M{"channel_id": channelId}).Skip(0).Limit(10).All(result)
+		fn := c.Find(bson.M{"channel_id": channelId}).Skip(skip).Limit(limit).All(result)
 		return fn
 	}
 	err = withCollection("messages", query)
 	return result, err
 }
 
-func GetMessageByDeviceId(deviceId int64) (result *[]Message, err error) {
+func GetMessageByDeviceId(deviceId int64, skip int, limit int) (result *[]Message, err error) {
 	result = &[]Message{}
 	query := func(c *mgo.Collection) error {
-		fn := c.Find(bson.M{"device_id": deviceId}).Skip(0).Limit(10).All(result)
+		fn := c.Find(bson.M{"device_id": deviceId}).Skip(skip).Limit(limit).All(result)
 		return fn
 	}
 	err = withCollection("messages", query)

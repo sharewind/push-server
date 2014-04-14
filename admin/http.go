@@ -123,44 +123,58 @@ func (s *httpServer) messageHandler(w http.ResponseWriter, req *http.Request) {
 func (s *httpServer) messageListHandler(w http.ResponseWriter, req *http.Request) {
 	reqParams, err := util.NewReqParams(req)
 	if err != nil {
-
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	channelId, err := reqParams.Get("channel_id")
+
+	idStr, err := reqParams.Get("channel_id")
 	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	id, err := strconv.ParseInt(channelId, 10, 64)
-	if err != nil {
 
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	result, err := model.GetMessageByChannelId(id)
+	skip, limit := GetSkipLimit(reqParams)
+	result, err := model.GetMessageByChannelId(id, skip, limit)
 	if err != nil {
-
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
 	for _, m := range *result {
 		m.OK, m.Err, err = model.GetMsgOKErrCount(m.ID)
+		log.Debug("%d %d\n", m.ID, m.CreatedAt)
 	}
+
 	r, err := json.Marshal(result)
+	if err != nil {
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	log.Debug(string(r))
 	io.WriteString(w, string(r))
 	return
 
 }
 
 func (s *httpServer) channelListHandler(w http.ResponseWriter, req *http.Request) {
-	result, err := model.ListChannel()
+	reqParams, err := util.NewReqParams(req)
 	if err != nil {
-
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	result, err := model.ListChannel(GetSkipLimit(reqParams))
+	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
@@ -170,9 +184,14 @@ func (s *httpServer) channelListHandler(w http.ResponseWriter, req *http.Request
 }
 
 func (s *httpServer) deviceListHandler(w http.ResponseWriter, req *http.Request) {
-	result, err := model.ListDevice()
+	reqParams, err := util.NewReqParams(req)
 	if err != nil {
-
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	result, err := model.ListDevice(GetSkipLimit(reqParams))
+	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
@@ -182,9 +201,14 @@ func (s *httpServer) deviceListHandler(w http.ResponseWriter, req *http.Request)
 }
 
 func (s *httpServer) subListHandler(w http.ResponseWriter, req *http.Request) {
-	result, err := model.ListSubscribe()
+	reqParams, err := util.NewReqParams(req)
 	if err != nil {
-
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	result, err := model.ListSubscribe(GetSkipLimit(reqParams))
+	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
@@ -199,7 +223,6 @@ func (s *httpServer) subCountHandler(w http.ResponseWriter, req *http.Request) {
 	id, _ := strconv.ParseInt(channelId, 10, 64)
 	result, err := model.CountSubscribe(id, 0)
 	if err != nil {
-
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
@@ -209,7 +232,13 @@ func (s *httpServer) subCountHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *httpServer) indexHandler(w http.ResponseWriter, req *http.Request) {
-	channels, err := model.ListChannel()
+	reqParams, err := util.NewReqParams(req)
+	if err != nil {
+		log.Error(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	channels, err := model.ListChannel(GetSkipLimit(reqParams))
 
 	p := struct {
 		Title    string
@@ -312,13 +341,13 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		messages, err := model.GetMessageByChannelId(channel.ID)
+		messages, err := model.GetMessageByChannelId(channel.ID, 0, 10)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 
-		subs, err := model.GetSubscribeByChannelId(channel.ID)
+		subs, err := model.GetSubscribeByChannelId(channel.ID, 0, 10)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -356,4 +385,28 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "Template Error", 500)
 		}
 	}
+}
+
+func GetSkipLimit(params *util.ReqParams) (skip int, limit int) {
+	skipStr, err := params.Get("skip")
+	if err != nil {
+		log.Error(err.Error())
+		skip = 0
+	}
+	skip, err = strconv.Atoi(skipStr)
+	if err != nil || skip < 0 {
+		log.Error(err.Error())
+		skip = 0
+	}
+	limitStr, err := params.Get("limit")
+	if err != nil {
+		log.Error(err.Error())
+		limit = 10
+	}
+	limit, err = strconv.Atoi(limitStr)
+	if err != nil || limit < 0 || limit > 100 {
+		log.Error(err.Error())
+		limit = 10
+	}
+	return
 }
