@@ -62,6 +62,20 @@ func CountChannel() (result int, err error) {
 	return result, err
 }
 
+func CheckOrCreateChannel(channel_id int64) (result bool) {
+	_, err := FindChannelByID(channel_id)
+	if err != nil {
+		log.Debug("channel check not exist")
+		channel := &Channel{channel_id, "", 0, "", 0, "", 0}
+		err := SaveChannel(channel)
+		if err != nil {
+			log.Error("channel insert error: %s", err.Error())
+			return false
+		}
+	}
+	return true
+}
+
 // func IsValidChannel(channelId int64) (valid bool) {
 // 	query := func(c *mgo.Collection) error {
 // 		result, fn := c.FindId(channelId).Count()
