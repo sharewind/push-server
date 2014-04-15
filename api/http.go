@@ -8,7 +8,7 @@ import (
 	// "net"
 	"net/http"
 	"net/url"
-	// "strconv"
+	"strconv"
 	// "strings"
 	"time"
 
@@ -81,6 +81,11 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
+	if err != nil || channel_id == 0 {
+		util.ApiResponse(w, 400, "channel_id is error", nil)
+	}
+
 	serial_no := reqParams.Get("serial_no")
 	if len(serial_no) == 0 {
 		util.ApiResponse(w, 400, "serial_no is required", nil)
@@ -93,6 +98,13 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	// 	util.ApiResponse(w, 400, "INVALID_DEVICE_TYPE", nil)
 	// 	return
 	// }
+
+	result := model.CheckOrCreateChannel(channel_id)
+	if result == false {
+		log.Debug("CheckOrCreateChannel error")
+	} else {
+		log.Debug("CheckOrCreateChannel ok")
+	}
 
 	var device *model.Device = nil
 	deviceID, err := model.FindDeviceIDBySerialNO(serial_no)

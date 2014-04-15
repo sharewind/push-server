@@ -13,7 +13,13 @@ func init() {
 <table class="table table-condensed table-bordered">
 {{range $c := .Channels}}
     <tr>
-        <td><a href="/channel/{{.ID}}">{{.Name}}</a></td>
+        <td><a href="/channel/{{.ID}}">
+        	{{if .Name}}
+        	{{.Name}}
+        	{{else}}
+        	{{.ID}}
+        	{{end}}
+        </a></td>
     </tr>
 {{end}}
 </table>

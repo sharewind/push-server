@@ -12,6 +12,7 @@ tags
 _site
 _posts
 *.dat
+build.sh
 
 # Go.gitignore
 

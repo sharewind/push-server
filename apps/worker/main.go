@@ -17,7 +17,7 @@ func main() {
 	}()
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	httpAddr := "10.2.58.178:8710"
+	httpAddr := "0.0.0.0:8710"
 	w := worker.NewWorker(httpAddr)
 	w.Main()
 	w.ConnectToBroker("127.0.0.1:8600")

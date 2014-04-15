@@ -42,10 +42,10 @@ func IncreaseChannelMessageCount(ID int64, delta int) {
 
 }
 
-func ListChannel() (result *[]Channel, err error) {
+func ListChannel(skip int, limit int) (result *[]Channel, err error) {
 	result = &[]Channel{}
 	query := func(c *mgo.Collection) error {
-		fn := c.Find(nil).Skip(0).Limit(10).All(result)
+		fn := c.Find(nil).Skip(skip).Limit(limit).All(result)
 		return fn
 	}
 	err = withCollection("channels", query)
@@ -60,6 +60,20 @@ func CountChannel() (result int, err error) {
 	}
 	err = withCollection("channels", query)
 	return result, err
+}
+
+func CheckOrCreateChannel(channel_id int64) (result bool) {
+	_, err := FindChannelByID(channel_id)
+	if err != nil {
+		log.Debug("channel check not exist")
+		channel := &Channel{channel_id, "", 0, "", 0, "", 0}
+		err := SaveChannel(channel)
+		if err != nil {
+			log.Error("channel insert error: %s", err.Error())
+			return false
+		}
+	}
+	return true
 }
 
 // func IsValidChannel(channelId int64) (valid bool) {
