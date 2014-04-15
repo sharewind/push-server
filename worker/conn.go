@@ -85,7 +85,7 @@ func newNSQConn(rdyChan chan *nsqConn, addr string,
 		drainReady: make(chan int),
 	}
 
-	_, err = nc.Write(MagicV2)
+	_, err = nc.Write(MagicV1)
 	if err != nil {
 		nc.Close()
 		return nil, fmt.Errorf("[%s] failed to write magic - %s", addr, err.Error())
