@@ -17,10 +17,10 @@ var (
 	log     = logging.MustGetLogger("main")
 	flagSet = flag.NewFlagSet("admin", flag.ExitOnError)
 
-	config      = flagSet.String("config", "", "path to config file")
+	config      = flagSet.String("config", "./admin.cfg", "path to config file")
 	showVersion = flagSet.Bool("version", false, "print version string")
 
-	httpAddress = flagSet.String("http-address", "0.0.0.0:4171", "<addr>:<port> to listen on for HTTP clients")
+	httpAddress = flagSet.String("http-address", "", "<addr>:<port> to listen on for HTTP clients")
 	templateDir = flagSet.String("template-dir", "", "path to templates directory")
 )
 
@@ -47,6 +47,11 @@ func main() {
 	var cfg map[string]interface{}
 	if *config != "" {
 		_, err := toml.DecodeFile(*config, &cfg)
+
+		for k, v := range cfg {
+			log.Debug(k, v)
+		}
+
 		if err != nil {
 			log.Fatalf("ERROR: failed to load config file %s - %s", *config, err.Error())
 		}
@@ -54,6 +59,10 @@ func main() {
 
 	opts := NewadminOptions()
 	options.Resolve(opts, flagSet, cfg)
+
+	// log.Debug(flagSet.Lookup("http-address").Value.String())
+	log.Debug(opts.HTTPAddress)
+
 	admin := Newadmin(opts)
 
 	log.Debug(util.Version("admin"))

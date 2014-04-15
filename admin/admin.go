@@ -14,8 +14,9 @@ type admin struct {
 }
 
 func Newadmin(options *adminOptions) *admin {
-
+	log.Debug(options.HTTPAddress)
 	httpAddr, err := net.ResolveTCPAddr("tcp", options.HTTPAddress)
+	log.Debug(httpAddr.String())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,6 +29,7 @@ func Newadmin(options *adminOptions) *admin {
 
 func (n *admin) Main() {
 	httpListener, err := net.Listen("tcp", n.httpAddr.String())
+	log.Debug(httpListener.Addr().String())
 	if err != nil {
 		log.Fatalf("FATAL: listen (%s) failed - %s", n.httpAddr, err.Error())
 	}

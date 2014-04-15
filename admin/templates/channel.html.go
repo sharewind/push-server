@@ -5,7 +5,7 @@ func init() {
 
 <div class="row-fluid"><div class="span6">
 {{if .Channel}}
-<table class="table table-condensed table-bordered">
+<table class="table table-striped table-condensed table-bordered">
     {{$c := .Channel}}
     <tr>
         <td>id</td>
@@ -40,7 +40,7 @@ func init() {
 <div class="alert"><h4>Notice</h4>No Topics Found</div>
 {{end}}
 
-<table class="table table-condensed table-bordered">
+<table class="table table-striped table-condensed table-bordered">
     messages
     <tr>
         <td>id</td>
@@ -74,7 +74,7 @@ func init() {
     {{end}}
 </table>
 
-<table class="table table-condensed table-bordered">
+<table class="table table-striped table-condensed table-bordered">
     subscribes
     <tr>
         <td>ChannelID</td>
@@ -93,7 +93,7 @@ func init() {
     </tr>
     {{end}}
 </table>
-<table class="table table-condensed table-bordered">
+<table class="table table-striped table-condensed table-bordered">
     sub count
     {{range $key, $value := .SubCount}}
     <tr>

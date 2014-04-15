@@ -45,7 +45,7 @@ func IncreaseChannelMessageCount(ID int64, delta int) {
 func ListChannel(skip int, limit int) (result *[]Channel, err error) {
 	result = &[]Channel{}
 	query := func(c *mgo.Collection) error {
-		fn := c.Find(nil).Skip(0).Limit(10).All(result)
+		fn := c.Find(nil).Skip(skip).Limit(limit).All(result)
 		return fn
 	}
 	err = withCollection("channels", query)
