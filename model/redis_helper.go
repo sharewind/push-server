@@ -36,11 +36,11 @@ func init() {
 	}
 }
 
-func SetClientConn(clientID string, brokerAddr string) error {
+func SetClientConn(clientID int64, brokerAddr string) error {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	key := fmt.Sprintf("client:%s", clientID)
+	key := fmt.Sprintf("client:%d", clientID)
 	expiresSecconds := 3600 * 24
 	conn.Send("SET", key, brokerAddr)
 	conn.Send("EXPIRE", key, expiresSecconds)
@@ -50,33 +50,33 @@ func SetClientConn(clientID string, brokerAddr string) error {
 	return nil
 }
 
-func GetClientConn(clientID string) (result string, err error) {
+func GetClientConn(clientID int64) (result string, err error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	key := fmt.Sprintf("client:%s", clientID)
+	key := fmt.Sprintf("client:%d", clientID)
 	if result, err = redis.String(conn.Do("GET", key)); err != nil {
 		return "", err
 	}
 	return result, err
 }
 
-func DelClientConn(clientID string) (err error) {
+func DelClientConn(clientID int64) (err error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	key := fmt.Sprintf("client:%s", clientID)
+	key := fmt.Sprintf("client:%d", clientID)
 	if _, err = conn.Do("DEL", key); err != nil {
 		return err
 	}
 	return nil
 }
 
-func SaveOfflineMessage(clientID string, messageID int64) error {
+func SaveOfflineMessage(clientID int64, messageID int64) error {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	key := fmt.Sprintf("off:%s", clientID)
+	key := fmt.Sprintf("off:%d", clientID)
 	expiresSecconds := 3600 * 24 * 7
 	conn.Send("ZADD", key, messageID, messageID)
 	conn.Send("ZREMRANGEBYRANK", key, 1000, 10000) // limit 1000
@@ -87,11 +87,11 @@ func SaveOfflineMessage(clientID string, messageID int64) error {
 	return nil
 }
 
-func RemoveOfflineMessage(clientID string, messageID int64) (err error) {
+func RemoveOfflineMessage(clientID int64, messageID int64) (err error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	key := fmt.Sprintf("off:%s", clientID)
+	key := fmt.Sprintf("off:%d", clientID)
 	conn.Send("ZREM", key, messageID)
 	if _, err := conn.Do(""); err != nil {
 		return err
@@ -99,11 +99,11 @@ func RemoveOfflineMessage(clientID string, messageID int64) (err error) {
 	return nil
 }
 
-func GetOfflineMessages(clientID string) (messageIDs []int64, err error) {
+func GetOfflineMessages(clientID int64) (messageIDs []int64, err error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	key := fmt.Sprintf("off:%s", clientID)
+	key := fmt.Sprintf("off:%d", clientID)
 	values, err := redis.Values(conn.Do("ZRANGE", key, 0, -1))
 	if err != nil {
 		return nil, err

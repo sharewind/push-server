@@ -236,8 +236,8 @@ func (w *Worker) pushMessage(message *model.Message) {
 	for _, sub := range subs {
 		err := w.sendMessage2Client(&sub, message)
 		if err != nil {
-			log.Debug("INFO saveOfflineMessage clientID %s messageID %s", sub.DeviceID, message.ID)
-			model.SaveOfflineMessage(fmt.Sprintf("%d", sub.DeviceID), message.ID)
+			log.Debug("INFO saveOfflineMessage clientID %d messageID %d", sub.DeviceID, message.ID)
+			model.SaveOfflineMessage(sub.DeviceID, message.ID)
 		}
 	}
 }
@@ -250,7 +250,7 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 	// 	saveOfflineMessage(device_id, message_id)
 	// }
 
-	broker_addr, err := model.GetClientConn(fmt.Sprintf("%d", sub.DeviceID))
+	broker_addr, err := model.GetClientConn(sub.DeviceID)
 	if err != nil {
 		log.Debug("ERROR: GetClientConn by redis  [%s]  err %s ", sub.DeviceID, err)
 		//TODO save offline message
@@ -593,7 +593,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 			}
 
 			if ackType != int64(ACK_SUCCESS) {
-				model.SaveOfflineMessage(fmt.Sprintf("%d", clientId), msgId)
+				model.SaveOfflineMessage(clientId, msgId)
 				model.IncrMsgErrCount(msgId, 1)
 				model.IncrClientErrCount(clientId, 1)
 			} else {

@@ -10,6 +10,7 @@ import (
 	"github.com/mreiferson/go-snappystream"
 	// "github.com/op/go-logging"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -73,9 +74,9 @@ type client struct {
 	ReadyStateChan chan int
 	ExitChan       chan int
 
-	ClientID   string
+	ClientID   int64
 	Hostname   string
-	SubChannel string
+	SubChannel int64
 
 	SampleRate int32
 
@@ -117,7 +118,7 @@ func newClient(conn net.Conn, context *context) *client {
 		ConnectTime:    time.Now(),
 		// State:          broker.StateInit,
 
-		ClientID: identifier,
+		ClientID: -1,
 		Hostname: identifier,
 
 		// SubEventChan:      make(chan *Channel, 1),
@@ -139,7 +140,7 @@ func (c *client) Identify(data identifyDataV2) error {
 	clientId := data.ClientID
 
 	c.Lock()
-	c.ClientID = clientId
+	c.ClientID, _ = strconv.ParseInt(clientId, 10, 64)
 	c.Hostname = hostname
 	c.UserAgent = data.UserAgent
 	c.Role = data.Role
@@ -189,9 +190,9 @@ func (c *client) Identify(data identifyDataV2) error {
 func (c *client) Stats() ClientStats {
 	c.RLock()
 	// TODO: deprecated, remove in 1.0
-	name := c.ClientID
+	name := fmt.Sprintf("%s", c.ClientID)
 
-	clientId := c.ClientID
+	clientId := fmt.Sprintf("%s", c.ClientID)
 	hostname := c.Hostname
 	userAgent := c.UserAgent
 	c.RUnlock()

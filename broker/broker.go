@@ -123,11 +123,11 @@ func (b *Broker) Exit() {
 }
 
 // AddClient adds a client to the Channel's client list
-func (b *Broker) AddClient(clientID string, channelID string, client *client) {
+func (b *Broker) AddClient(clientID int64, channelID int64, client *client) {
 	b.Lock()
 	defer b.Unlock()
 
-	key := fmt.Sprintf("%s_%s", clientID, channelID)
+	key := fmt.Sprintf("%d_%d", clientID, channelID)
 	log.Debug("put client[%s] = %s", key, client)
 	_, ok := b.clients[key]
 	if ok {
@@ -137,11 +137,11 @@ func (b *Broker) AddClient(clientID string, channelID string, client *client) {
 }
 
 // RemoveClient removes a client from the Channel's client list
-func (b *Broker) RemoveClient(clientID string, channelID string) {
+func (b *Broker) RemoveClient(clientID int64, channelID int64) {
 	b.Lock()
 	defer b.Unlock()
 
-	key := fmt.Sprintf("%s_%s", clientID, channelID)
+	key := fmt.Sprintf("%d_%d", clientID, channelID)
 	_, ok := b.clients[key]
 	if !ok {
 		return
@@ -153,10 +153,10 @@ func (b *Broker) RemoveClient(clientID string, channelID string) {
 	// }
 }
 
-func (b *Broker) GetClient(clientID string, channelID string) (client *client, err error) {
+func (b *Broker) GetClient(clientID int64, channelID int64) (client *client, err error) {
 	b.RLock()
 	defer b.RUnlock()
-	key := fmt.Sprintf("%s_%s", clientID, channelID)
+	key := fmt.Sprintf("%d_%d", clientID, channelID)
 	log.Debug("get client[%s] ", key)
 	// log.Debug("%s", b.clients)
 

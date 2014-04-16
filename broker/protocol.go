@@ -113,9 +113,8 @@ func (p *protocol) cleanupClientConn(client *client) {
 	model.DelClientConn(client.ClientID)
 	p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
 
-	client_id, _ := strconv.ParseInt(client.ClientID, 10, 64)
 	// touch devie online
-	model.TouchDeviceOffline(client_id)
+	model.TouchDeviceOffline(client.ClientID)
 
 	close(client.ExitChan)
 	// if client.Channel != nil {
@@ -340,14 +339,13 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	//TODO FIXME
-	str_channel_id := string(params[1])
-	channel_id, err := strconv.ParseInt(str_channel_id, 10, 64) //TODO need validate channel_id
+	channel_id, err := strconv.ParseInt(string(params[1]), 10, 64) //TODO need validate channel_id
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
 	}
-	client_id, err := strconv.ParseInt(client.ClientID, 10, 64)
+	client_id := client.ClientID
 	if err != nil {
-		log.Error("invalid client id [%s] err: %s", client.ClientID, err)
+		log.Error("invalid client id [%s] err: %d", client.ClientID, err)
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
 	}
 
@@ -374,14 +372,14 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
 
-	p.context.broker.AddClient(client.ClientID, str_channel_id, client)
-	log.Debug("INFO: clientId %d sub channel %s success ", client.ClientID, channel_id)
+	p.context.broker.AddClient(client.ClientID, channel_id, client)
+	log.Debug("INFO: clientId %d sub channel %d success ", client.ClientID, channel_id)
 
 	// touch devie online
 	model.TouchDeviceOnline(client_id)
 
 	// should send client connected eventsf
-	log.Debug("INFO: SetClientConn clientID=%s, broker_addr=%s", client.ClientID, client.LocalAddr().String())
+	log.Debug("INFO: SetClientConn clientID=%d, broker_addr=%d", client.ClientID, client.LocalAddr().String())
 	err = model.SetClientConn(client.ClientID, client.LocalAddr().String())
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
@@ -395,7 +393,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	// channel.AddClient(client.ID, client)
 
 	atomic.StoreInt32(&client.State, StateSubscribed)
-	client.SubChannel = str_channel_id
+	client.SubChannel = channel_id
 	go p.checkOfflineMessage(client)
 	// client.Channel = channel
 	// update message pump
@@ -409,11 +407,11 @@ func (p *protocol) checkOfflineMessage(client *client) {
 
 	messageIDs, err := model.GetOfflineMessages(client.ClientID)
 	if err != nil || messageIDs == nil {
-		log.Debug("ERROR: GetOfflineMessages clientID %s error %s ", client.ClientID, err)
+		log.Debug("ERROR: GetOfflineMessages clientID %d error %d ", client.ClientID, err)
 		return
 	}
 
-	subChannel, _ := strconv.ParseInt(client.SubChannel, 10, 64)
+	subChannel := client.SubChannel
 	for _, messageID := range messageIDs {
 		msg, err := model.FindMessageByID(messageID)
 		if err != nil || msg == nil {
@@ -522,16 +520,14 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body")
 	}
 
-	client_id := string(params[1])
-	channel_id := string(params[2])
-	message_id := string(params[3])
-	msgId, _ := strconv.ParseInt(message_id, 10, 64)
-	log.Debug("msgId ==  %d", msgId)
+	client_id, _ := strconv.ParseInt(string(params[1]), 10, 64)
+	channel_id, _ := strconv.ParseInt(string(params[2]), 10, 64)
+	message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
 
 	// TODO 另外启动一个channel 与 goroutine 用来处理这个消息
 	dstClient, err := p.context.broker.GetClient(client_id, channel_id)
 	if err != nil || dstClient == nil {
-		p.ackPublish(client, util.ACK_OFF, client_id, msgId)
+		p.ackPublish(client, util.ACK_OFF, client_id, message_id)
 		// model.SaveOfflineMessage(dstClient.ClientID, msgId)
 		log.Debug("client %s is null", client_id)
 		return nil, nil
@@ -541,7 +537,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, dstClient)
 
 	msg := &Message{
-		Id:        util.Guid(msgId).Hex(),
+		Id:        util.Guid(message_id).Hex(),
 		Body:      body,
 		Timestamp: time.Now().UnixNano(),
 	}
@@ -557,14 +553,14 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	dstClient.Unlock()
 
 	if err != nil {
-		p.ackPublish(client, util.ACT_ERR, client_id, msgId)
+		p.ackPublish(client, util.ACT_ERR, client_id, message_id)
 	} else {
-		p.ackPublish(client, util.ACK_SUCCESS, client_id, msgId)
+		p.ackPublish(client, util.ACK_SUCCESS, client_id, message_id)
 	}
 	return nil, nil
 }
 
-func (p *protocol) ackPublish(client *client, ackType int32, clientID string, msgID int64) (err error) {
+func (p *protocol) ackPublish(client *client, ackType int32, clientID int64, msgID int64) (err error) {
 	response := []byte(fmt.Sprintf("%d %s %d", ackType, clientID, msgID))
 	err = p.Send(client, util.FrameTypeAck, response)
 	if err != nil {
