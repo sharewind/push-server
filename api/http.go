@@ -22,6 +22,41 @@ type httpServer struct {
 	context *context
 }
 
+const (
+	NotFound      = -1
+	OK            = 0
+	ParamErr      = 1
+	InternalErr   = 2
+	MethodErr     = 3
+	MsgEmpty      = 4
+	MsgTooLong    = 5
+	MsgErr        = 6
+	ChannelIdErr  = 7
+	DeviceTypeErr = 8
+	SerialNoErr   = 9
+)
+
+var (
+	Msg map[int]string
+)
+
+func init() {
+	// Err massage
+	Msg = make(map[int]string)
+
+	Msg[NotFound] = "not found"
+	Msg[OK] = "OK"
+	Msg[ParamErr] = "param error"
+	Msg[InternalErr] = "internal exception"
+	Msg[MethodErr] = "method error"
+	Msg[MsgEmpty] = "message is empty"
+	Msg[MsgTooLong] = "message is too long"
+	Msg[MsgErr] = "message is error"
+	Msg[ChannelIdErr] = "channel id is error"
+	Msg[DeviceTypeErr] = "device type is error"
+	Msg[SerialNoErr] = "serial NO is error"
+}
+
 func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch req.URL.Path {
 	case "/registration":
@@ -48,7 +83,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		httpprof.Handler("threadcreate").ServeHTTP(w, req)
 	default:
 		log.Debug("ERROR: 404 %s", req.URL.Path)
-		util.ApiResponse(w, 404, "NOT_FOUND", nil)
+		util.ApiResponse(w, 404, NotFound, Msg[NotFound], nil)
 	}
 }
 
@@ -58,7 +93,7 @@ func (s *httpServer) pingHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
-	util.ApiResponse(w, 200, "OK", struct {
+	util.ApiResponse(w, 200, OK, Msg[OK], struct {
 		Version string `json:"version"`
 	}{
 		Version: util.BINARY_VERSION,
@@ -77,18 +112,18 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {
 		log.Debug("ERROR: failed to parse request params - %s", err.Error())
-		util.ApiResponse(w, 400, "INVALID_REQUEST", nil)
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
 		return
 	}
 
 	channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
 	if err != nil || channel_id == 0 {
-		util.ApiResponse(w, 400, "channel_id is error", nil)
+		util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
 	}
 
 	serial_no := reqParams.Get("serial_no")
 	if len(serial_no) == 0 {
-		util.ApiResponse(w, 400, "serial_no is required", nil)
+		util.ApiResponse(w, 400, SerialNoErr, Msg[SerialNoErr], nil)
 		return
 	}
 
@@ -115,7 +150,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 		// log.Debug("INFO: FindDeviceByID %d result %#v", deviceID, device)
 		if err != nil || device == nil {
 			log.Debug("ERROR: FindDeviceByID error %s", err)
-			util.ApiResponse(w, 500, "INTERNAL_ERROR", nil)
+			util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
 			return
 		}
 	}
@@ -133,7 +168,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 		err = model.SaveDevice(device)
 		if err != nil {
 			log.Debug("ERROR: SaveDevice %s error %s", device, err)
-			util.ApiResponse(w, 500, "INTERNAL_ERROR", nil)
+			util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
 			return
 		}
 	} else {
@@ -143,5 +178,5 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	data["broker"] = "b1.zhan.sohu.com"
 	data["device_id"] = device.ID
 	log.Info("INFO: regiest success %s", serial_no)
-	util.ApiResponse(w, 200, "OK", data)
+	util.ApiResponse(w, 200, OK, Msg[OK], data)
 }

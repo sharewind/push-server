@@ -7,14 +7,16 @@ import (
 	"strconv"
 )
 
-func ApiResponse(w http.ResponseWriter, statusCode int, statusTxt string, data interface{}) {
+func ApiResponse(w http.ResponseWriter, statusCode int, errorCode int, errorMsg string, data interface{}) {
 	response, err := json.Marshal(struct {
-		StatusCode int         `json:"status_code"`
-		StatusTxt  string      `json:"status_txt"`
-		Data       interface{} `json:"data"`
+		// StatusCode int         `json:"status_code"`
+		code int         `json:"code"`
+		msg  string      `json:"msg"`
+		Data interface{} `json:"data"`
 	}{
-		statusCode,
-		statusTxt,
+		// statusCode,
+		errorCode,
+		errorMsg,
 		data,
 	})
 	if err != nil {
