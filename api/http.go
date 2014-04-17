@@ -104,10 +104,10 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	log.Debug("INFO: request %s ", req.URL.RawQuery)
 
-	// if req.Method != "POST" {
-	// 	util.ApiResponse(w, 405, MethodErr, Msg[MethodErr], nil)
-	// 	return
-	// }
+	if req.Method != "POST" {
+		util.ApiResponse(w, 405, MethodErr, Msg[MethodErr], nil)
+		return
+	}
 
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {

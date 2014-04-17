@@ -76,32 +76,37 @@ func ApiRequest(endpoint string) (*simplejson.Json, error) {
 	return data.Get("data"), nil
 }
 
+//this method no body, careful,just for test client
 func ApiPostRequest(endpoint string) (*simplejson.Json, error) {
 	httpclient := &http.Client{Transport: NewDeadlineTransport(200 * time.Second)}
 	req, err := http.NewRequest("POST", endpoint, nil)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 
 	resp, err := httpclient.Do(req)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 
 	data, err := simplejson.NewJson(body)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 
 	statusCode := data.Get("status_code").MustInt()
 	statusTxt := data.Get("status_txt").MustString()
-	if statusCode != 200 {
+	if statusCode != 0 {
 		return nil, errors.New(fmt.Sprintf("response status_code = %d, status_txt = %s",
 			statusCode, statusTxt))
 	}
