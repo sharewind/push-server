@@ -327,15 +327,17 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	_, ok := q.nsqConnections[addr]
 	_, pendingOk := q.pendingConnections[addr]
 	if ok || pendingOk {
+		log.Debug("[%s] conntectd already", addr)
 		q.RUnlock()
 		return ErrAlreadyConnected
 	}
 	q.RUnlock()
 
-	log.Debug("[%s] connecting to nsqd", addr)
+	log.Debug("[%s] connecting to broker", addr)
 
 	connection, err := newNSQConn(nil, addr, q.ReadTimeout, q.WriteTimeout)
 	if err != nil {
+		log.Warning("failure to connected to [%s]", addr)
 		return err
 	}
 	cleanupConnection := func() {
@@ -455,8 +457,8 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	return nil
 }
 
-func handleError(q *Worker, c *nsqConn, errMsg string) {
-	log.Debug(errMsg)
+func handleError(w *Worker, c *nsqConn, errMsg string) {
+	log.Debug("[%s] handleError %s", c, errMsg)
 	atomic.StoreInt32(&c.stopFlag, 1)
 
 	// q.RLock()
@@ -467,10 +469,10 @@ func handleError(q *Worker, c *nsqConn, errMsg string) {
 		for {
 			log.Debug("[%s] re-connecting in 15 seconds...", addr)
 			time.Sleep(15 * time.Second)
-			if atomic.LoadInt32(&q.stopFlag) == 1 {
+			if atomic.LoadInt32(&w.stopFlag) == 1 {
 				break
 			}
-			err := q.ConnectToBroker(addr)
+			err := w.ConnectToBroker(addr)
 			if err != nil && err != ErrAlreadyConnected {
 				log.Debug("ERROR: failed to connect to %s - %s",
 					addr, err.Error())
@@ -516,16 +518,22 @@ func (w *Worker) messagePump(c *nsqConn) {
 	}
 
 exit:
-	log.Debug("broker: [%s] exiting messagePump", c)
 	heartbeatTicker.Stop()
 	if err != nil {
 		log.Debug("broker: [%s] messagePump error - %s", c, err.Error())
 	}
+
+	c.wg.Done()
+	log.Debug("broker: [%s] exiting messagePump", c)
 }
 
 func (w *Worker) readLoop(c *nsqConn) {
 	for {
-		if atomic.LoadInt32(&c.stopFlag) == 1 || atomic.LoadInt32(&c.stopFlag) == 1 {
+		log.Debug("INFO: [%s] client readLoop", c)
+
+		if atomic.LoadInt32(&w.stopFlag) == 1 || atomic.LoadInt32(&c.stopFlag) == 1 {
+			log.Debug("INFO: [%s] stopBrokerConn on client stopFlag ", c)
+			w.stopBrokerConn(c)
 			goto exit
 		}
 
@@ -546,7 +554,10 @@ func (w *Worker) readLoop(c *nsqConn) {
 				handleError(w, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
 				continue
 			}
+
+			// if q.VerboseLogging {
 			log.Debug("INFO: [%s] FrameTypeMessage receive  %s - %s", c, msg.Id, msg.Body)
+			// }
 
 			// remain := atomic.AddInt64(&c.rdyCount, -1)
 			// atomic.AddInt64(&q.totalRdyCount, -1)
@@ -555,11 +566,6 @@ func (w *Worker) readLoop(c *nsqConn) {
 			// atomic.AddInt64(&c.messagesInFlight, 1)
 			// atomic.AddInt64(&q.messagesInFlight, 1)
 			// atomic.StoreInt64(&c.lastMsgTimestamp, time.Now().UnixNano())
-
-			// if q.VerboseLogging {
-			// 	log.Debug("[%s] (remain %d) FrameTypeMessage: %s - %s",
-			// 		c, remain, msg.Id, msg.Body)
-			// }
 
 			// q.incomingMessages <- msg
 			// c.rdyChan <- c
@@ -572,13 +578,6 @@ func (w *Worker) readLoop(c *nsqConn) {
 				log.Debug("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
 				atomic.StoreInt32(&c.stopFlag, 1)
 			case bytes.Equal(data, []byte("H")):
-				// var buf bytes.Buffer
-				// err := c.sendCommand(&buf, Nop())
-				// if err != nil {
-				// 	handleError(q, c, fmt.Sprintf("[%s] error sending NOP - %s",
-				// 		c, err.Error()))
-				// 	goto exit
-				// }
 				log.Debug("[%s] heartbeat received", c)
 			}
 		case FrameTypeAck:
@@ -615,23 +614,30 @@ exit:
 
 func (q *Worker) stopBrokerConn(c *nsqConn) {
 	c.stopper.Do(func() {
-		log.Debug("[%s] beginning stopFinishLoop", c)
+		log.Debug("[%s] beginning stopFinishLoop!", c)
 		close(c.exitChan)
+		// log.Debug("[%s] close c exitChan done!", c)
 		c.Close()
+		// log.Debug("[%s] close c conn done!", c)
 		go q.cleanupConnection(c)
+		// log.Debug("[%s] stopper Do done!", c)
 	})
+	// log.Debug("[%s] stopBrokerConn finished!", c)
 }
 
 func (q *Worker) cleanupConnection(c *nsqConn) {
 
+	log.Debug("[%s] cleanupConnection", c)
 	// this blocks until finishLoop and readLoop have exited
 	c.wg.Wait()
+	// log.Debug("clean up readLoop done conn[%s]", c)
 
 	q.Lock()
 	delete(q.nsqConnections, c.String())
 	left := len(q.nsqConnections)
 	q.Unlock()
 
+	log.Debug("clean up conn[%s] success!", c)
 	log.Debug("there are %d connections left alive", left)
 }
 
