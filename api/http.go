@@ -8,7 +8,7 @@ import (
 	// "net"
 	"net/http"
 	"net/url"
-	"strconv"
+	// "strconv"
 	// "strings"
 	"time"
 
@@ -105,7 +105,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	log.Debug("INFO: request %s ", req.URL.RawQuery)
 
 	// if req.Method != "POST" {
-	// 	util.ApiResponse(w, 405, "METHOD_NOT_SUPPORT", nil)
+	// 	util.ApiResponse(w, 405, MethodErr, Msg[MethodErr], nil)
 	// 	return
 	// }
 
@@ -116,10 +116,10 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
-	if err != nil || channel_id == 0 {
-		util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
-	}
+	// channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
+	// if err != nil || channel_id == 0 {
+	// 	util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
+	// }
 
 	serial_no := reqParams.Get("serial_no")
 	if len(serial_no) == 0 {
@@ -128,18 +128,13 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	device_name := reqParams.Get("device_name")
-	// device_type, err := strconv.ParseInt(reqParams.Get("device_type"), 10, 8)
-	// if device_type != model.Android {
-	// 	util.ApiResponse(w, 400, "INVALID_DEVICE_TYPE", nil)
-	// 	return
-	// }
 
-	result := model.CheckOrCreateChannel(channel_id)
-	if result == false {
-		log.Debug("CheckOrCreateChannel error")
-	} else {
-		log.Debug("CheckOrCreateChannel ok")
-	}
+	// result := model.CheckOrCreateChannel(channel_id)
+	// if result == false {
+	// 	log.Debug("CheckOrCreateChannel error")
+	// } else {
+	// 	log.Debug("CheckOrCreateChannel ok")
+	// }
 
 	var device *model.Device = nil
 	deviceID, err := model.FindDeviceIDBySerialNO(serial_no)

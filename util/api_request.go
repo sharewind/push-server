@@ -67,6 +67,38 @@ func ApiRequest(endpoint string) (*simplejson.Json, error) {
 		return nil, err
 	}
 
+	code := data.Get("code").MustInt()
+	msg := data.Get("msg").MustString()
+	if code != 0 {
+		return nil, errors.New(fmt.Sprintf("code = %d, msg = %s",
+			code, msg))
+	}
+	return data.Get("data"), nil
+}
+
+func ApiPostRequest(endpoint string) (*simplejson.Json, error) {
+	httpclient := &http.Client{Transport: NewDeadlineTransport(200 * time.Second)}
+	req, err := http.NewRequest("POST", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := httpclient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := simplejson.NewJson(body)
+	if err != nil {
+		return nil, err
+	}
+
 	statusCode := data.Get("status_code").MustInt()
 	statusTxt := data.Get("status_txt").MustString()
 	if statusCode != 200 {

@@ -349,9 +349,9 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
 	}
 
-	channel, err := model.FindChannelByID(channel_id)
-	if err != nil || channel == nil {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
+	ok := model.CheckOrCreateChannel(channel_id)
+	if ok == false {
+		return nil, util.NewFatalClientErr(nil, "E_INVALID", "create channel error")
 	}
 	device, err := model.FindDeviceByID(client_id)
 	if err != nil || device == nil {
