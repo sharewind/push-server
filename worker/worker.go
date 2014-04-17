@@ -310,6 +310,28 @@ exit:
 	log.Debug("ID: closing")
 }
 
+func (w *Worker) SafeConnectToBroker(addr string) {
+	go func(addr string) {
+		for {
+			if atomic.LoadInt32(&w.stopFlag) == 1 {
+				break
+			}
+			err := w.ConnectToBroker(addr)
+			if err == nil {
+				log.Debug("INFO: connect to %s success ", addr)
+				break
+			}
+
+			if err != nil && err != ErrAlreadyConnected {
+				log.Debug("ERROR: failed to connect to %s - %s", addr, err.Error())
+			}
+
+			log.Debug("[%s] re-connecting in 15 seconds...", addr)
+			time.Sleep(15 * time.Second)
+		}
+	}(addr)
+}
+
 // ConnectToNSQ takes a nsqd address to connect directly to.
 //
 // It is recommended to use ConnectToLookupd so that topics are discovered
@@ -537,7 +559,6 @@ func (w *Worker) readLoop(c *nsqConn) {
 			goto exit
 		}
 
-		//TODO FIXME should listen on exist, need wait for timeout
 		frameType, data, err := c.readUnpackedResponse()
 		if err != nil {
 			handleError(w, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
