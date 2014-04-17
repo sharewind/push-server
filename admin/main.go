@@ -47,11 +47,6 @@ func main() {
 	var cfg map[string]interface{}
 	if *config != "" {
 		_, err := toml.DecodeFile(*config, &cfg)
-
-		for k, v := range cfg {
-			log.Debug(k, v)
-		}
-
 		if err != nil {
 			log.Fatalf("ERROR: failed to load config file %s - %s", *config, err.Error())
 		}
@@ -59,13 +54,7 @@ func main() {
 
 	opts := NewadminOptions()
 	options.Resolve(opts, flagSet, cfg)
-
-	// log.Debug(flagSet.Lookup("http-address").Value.String())
-	log.Debug(opts.HTTPAddress)
-
 	admin := Newadmin(opts)
-
-	log.Debug(util.Version("admin"))
 
 	admin.Main()
 	<-exitChan

@@ -314,7 +314,7 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		channel := &model.Channel{id, name, time.Now().Unix(), creatorStr, appid, appname, 0}
+		channel := &model.Channel{id, name, time.Now().UnixNano(), creatorStr, appid, appname, 0}
 		err = model.SaveChannel(channel)
 		if err != nil {
 			log.Error(err.Error())
