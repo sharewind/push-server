@@ -196,6 +196,7 @@ func (w *Worker) PutMessage(msg *model.Message) error {
 	// }
 	w.incomingMsgChan <- msg
 	atomic.AddUint64(&w.messageCount, 1)
+	log.Debug("[worker]<PutMessage> %#v", msg)
 	return nil
 }
 
@@ -224,6 +225,7 @@ exit:
 }
 
 func (w *Worker) pushMessage(message *model.Message) {
+	log.Debug("[worker]<pushMessage> %#v", message)
 	// save message on mongodb
 	// devices_ids := querySubscibeDevices(channel_id)
 	skip := 0
@@ -237,7 +239,8 @@ func (w *Worker) pushMessage(message *model.Message) {
 	for _, sub := range subs {
 		err := w.sendMessage2Client(&sub, message)
 		if err != nil {
-			log.Debug("INFO saveOfflineMessage clientID %d messageID %d", sub.DeviceID, message.ID)
+			//TODO: increase failure count
+			log.Debug("saveOfflineMessage clientID %d messageID %d", sub.DeviceID, message.ID)
 			model.SaveOfflineMessage(sub.DeviceID, message.ID)
 		}
 	}
@@ -245,7 +248,7 @@ func (w *Worker) pushMessage(message *model.Message) {
 
 func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message) (err error) {
 	var buf bytes.Buffer
-	log.Debug("prepare send message channel_id %d device_id %d  body %s", message.ChannelID, sub.DeviceID, message.Body)
+	log.Debug("prepare send message: channel_id %d, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
 	// broker_id,err := getBrokerForDevice(device_id)
 	// if err != nil || broker_id == nil{
 	// 	saveOfflineMessage(device_id, message_id)
@@ -253,8 +256,7 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 
 	broker_addr, err := model.GetClientConn(sub.DeviceID)
 	if err != nil {
-		log.Debug("ERROR: GetClientConn by redis  [%s]  err %s ", sub.DeviceID, err)
-		//TODO save offline message
+		log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", sub.DeviceID, err)
 		return errors.New("client offline")
 	}
 
@@ -267,7 +269,6 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 	log.Debug(" publish conn %s is %s", broker_addr, conn)
 	if !ok {
 		log.Debug("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
-		//TODO save offline message
 		return errors.New("client offline")
 	}
 
@@ -276,12 +277,11 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 	err = conn.sendCommand(&buf, cmd)
 	if err != nil {
 		log.Debug("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
-		// saveOfflineMessage
-		// increase failure count
 		w.stopBrokerConn(conn)
-		return errors.New("client offline")
+		return errors.New("broker offline")
 	}
-	log.Debug(" send message success = %s", message.Body)
+
+	log.Debug("send message success: channel_id %d, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
 	return nil
 }
 
