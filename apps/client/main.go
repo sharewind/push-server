@@ -17,7 +17,7 @@ func main() {
 	c.Register("10.10.79.134:4171")
 	c.Connect()
 
-	channel_id := int64(12001)
+	channel_id := int64(11111)
 	c.Subscribe(channel_id)
 
 	exitChan := make(chan int)

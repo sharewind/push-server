@@ -52,7 +52,7 @@ func main() {
 		}
 	}
 
-	opts := NewadminOptions()
+	opts := NewAdminOptions()
 	options.Resolve(opts, flagSet, cfg)
 	admin := Newadmin(opts)
 

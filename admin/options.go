@@ -4,7 +4,7 @@ type adminOptions struct {
 	HTTPAddress string `flag:"http-address"`
 }
 
-func NewadminOptions() *adminOptions {
+func NewAdminOptions() *adminOptions {
 	return &adminOptions{
 		HTTPAddress: "0.0.0.0:4172",
 	}

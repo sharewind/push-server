@@ -7,20 +7,20 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-	// "time"
+	"time"
 )
 
 func main() {
 	runtime.GOMAXPROCS(4)
 	fmt.Println("client start!")
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 50000; i++ {
 
 		go createClient()
 		fmt.Println(i)
 
 		// runtime.Gosched()
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	exitChan := make(chan int)
@@ -50,11 +50,11 @@ func createClient() {
 	defer func() {
 		fmt.Println("createClient func done !")
 	}()
-	addr := "10.2.58.178:8600"
+	addr := "10.10.79.134:8600"
 
 	client_id := int64(451294706224070657)
 	c := client.NewClient(addr, client_id)
-	err := c.Register("10.2.58.178:4171")
+	err := c.Register("10.10.79.134:4171")
 	if err != nil {
 		fmt.Println("error1:", err.Error())
 		count++
@@ -66,7 +66,7 @@ func createClient() {
 		fmt.Println("error2:", err.Error())
 		return
 	}
-	channel_id := int64(1001)
+	channel_id := int64(11111)
 	err = c.Subscribe(channel_id)
 	if err != nil {
 		fmt.Println("error3:", err.Error())

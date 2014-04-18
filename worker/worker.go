@@ -105,13 +105,13 @@ var ErrNotConnected = errors.New("not connected")
 var ErrStopped = errors.New("stopped")
 
 // NewWriter returns an instance of Writer for the specified address
-func NewWorker(HTTPAddress string) *Worker {
+func NewWorker(options *workerOptions) *Worker {
 	// hostname, err := os.Hostname()
 	// if err != nil {
 	// 	log.Fatalf("ERROR: unable to get hostname %s", err.Error())
 	// }
 
-	httpAddr, err := net.ResolveTCPAddr("tcp", HTTPAddress)
+	httpAddr, err := net.ResolveTCPAddr("tcp", options.HTTPAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -212,6 +212,7 @@ func (w *Worker) Publish() {
 	for {
 		select {
 		case message := <-w.incomingMsgChan:
+			log.Debug("get imcoming %s", message)
 			go w.pushMessage(message)
 		case <-w.exitChan:
 			goto exit
@@ -271,6 +272,7 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 	}
 
 	cmd := client.Publish(sub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
+	log.Debug("send command")
 	err = conn.sendCommand(&buf, cmd)
 	if err != nil {
 		log.Debug("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
