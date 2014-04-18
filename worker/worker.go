@@ -196,6 +196,7 @@ func (w *Worker) PutMessage(msg *model.Message) error {
 	// }
 	w.incomingMsgChan <- msg
 	atomic.AddUint64(&w.messageCount, 1)
+	log.Debug("[worker]<PutMessage> %#v", msg)
 	return nil
 }
 
@@ -223,6 +224,7 @@ exit:
 }
 
 func (w *Worker) pushMessage(message *model.Message) {
+	log.Debug("[worker]<pushMessage> %#v", message)
 	// save message on mongodb
 	// devices_ids := querySubscibeDevices(channel_id)
 	skip := 0

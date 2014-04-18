@@ -561,7 +561,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 }
 
 func (p *protocol) ackPublish(client *client, ackType int32, clientID int64, msgID int64) (err error) {
-	response := []byte(fmt.Sprintf("%d %s %d", ackType, clientID, msgID))
+	response := []byte(fmt.Sprintf("%d %d %d", ackType, clientID, msgID))
 	err = p.Send(client, util.FrameTypeAck, response)
 	if err != nil {
 		log.Debug("ERROR: send response to client error %s ", err)
