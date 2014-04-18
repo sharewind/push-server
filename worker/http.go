@@ -34,6 +34,7 @@ const (
 	MsgErr        = 6
 	ChannelIdErr  = 7
 	DeviceTypeErr = 8
+	NoSubErr      = 9
 )
 
 var (
@@ -54,6 +55,7 @@ func init() {
 	Msg[MsgErr] = "message is error"
 	Msg[ChannelIdErr] = "channel id is error"
 	Msg[DeviceTypeErr] = "device type is error"
+	Msg[NoSubErr] = "channel has no sub"
 }
 
 func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -63,7 +65,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/put":
 		s.putHandler(w, req)
 	case "/create_channel":
-		// do nothing
+		s.createChannelHandler(w, req)
 	case "/update_channel":
 		// do nothing
 	case "/delete_channel":
@@ -111,29 +113,81 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// func (s *httpServer) createChannelHandler(w http.ResponseWriter, req *http.Request) {
-// 	reqParams, err := util.NewReqParams(req)
-// 	if err != nil {
-// 		log.Debug("ERROR: failed to parse request params - %s", err.Error())
-// 		util.ApiResponse(w, 400, "INVALID_REQUEST", nil)
-// 		return
-// 	}
+// curl -X POST /create_channel?key=10000001&id=1001&name=test&creator=kuaizhan_user_name&app_id=1001&app_name=test
+func (s *httpServer) createChannelHandler(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "POST" {
+		util.ApiResponse(w, 400, MethodErr, Msg[MethodErr], nil)
+		return
+	}
 
-// 	topicName, channelName, err := util.GetTopicChannelArgs(reqParams)
-// 	if err != nil {
-// 		util.ApiResponse(w, 400, err.Error(), nil)
-// 		return
-// 	}
+	reqParams, err := util.NewReqParams(req)
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
 
-// 	topic, err := s.context.nsqd.GetExistingTopic(topicName)
-// 	if err != nil {
-// 		util.ApiResponse(w, 400, "INVALID_TOPIC", nil)
-// 		return
-// 	}
+	//check auth key
+	key, err := reqParams.Get("key")
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+	if key != "10000001" {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
 
-// 	topic.GetChannel(channelName)
-// 	util.ApiResponse(w, 200, "OK", nil)
-// }
+	idStr, err := reqParams.Get("id")
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+
+	name, err := reqParams.Get("name")
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+
+	creatorStr, err := reqParams.Get("creator")
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+
+	appidStr, err := reqParams.Get("app_id")
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+
+	appid, err := strconv.ParseInt(appidStr, 10, 64)
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+
+	appname, err := reqParams.Get("app_name")
+	if err != nil {
+		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
+		return
+	}
+
+	channel := &model.Channel{id, name, time.Now().UnixNano(), creatorStr, appid, appname, 0}
+	err = model.SaveChannel(channel)
+	if err != nil {
+		util.ApiResponse(w, 400, InternalErr, Msg[InternalErr], nil)
+		return
+	}
+
+	util.ApiResponse(w, 200, OK, Msg[OK], nil)
+}
 
 //curl -d "hi sucess " http://localhost:8710/put?channel_id=1001&device_type=0
 func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
@@ -186,7 +240,7 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 	_, err = model.FindChannelByID(channel_id)
 	if err != nil {
 		log.Debug("ERROR: can not find channel  - %s", err.Error())
-		util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
+		util.ApiResponse(w, 400, NoSubErr, Msg[NoSubErr], nil)
 		return
 	}
 

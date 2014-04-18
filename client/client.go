@@ -168,7 +168,7 @@ func (c *Client) Register(addr string) error {
 	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%d&device_type=3&device_name=搜狐Android测试机%d", addr, time.Now().UnixNano(), time.Now().Unix())
 	log.Debug("LOOKUPD: querying %s", endpoint)
 
-	data, err := ApiRequest(endpoint)
+	data, err := ApiPostRequest(endpoint)
 	if err != nil {
 		log.Debug("ERROR: Register %s - %s - %s", addr, err.Error(), data)
 		return err
