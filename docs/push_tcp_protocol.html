@@ -1,0 +1,350 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<style>
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote {
+    margin: 0;
+    padding: 0;
+}
+body {
+    font-family: "Helvetica Neue", Helvetica, "Hiragino Sans GB", Arial, sans-serif;
+    font-size: 13px;
+    line-height: 18px;
+    color: #737373;
+    background-color: white;
+    margin: 10px 13px 10px 13px;
+}
+table {
+	margin: 10px 0 15px 0;
+	border-collapse: collapse;
+}
+td,th {	
+	border: 1px solid #ddd;
+	padding: 3px 10px;
+}
+th {
+	padding: 5px 10px;	
+}
+
+a {
+    color: #0069d6;
+}
+a:hover {
+    color: #0050a3;
+    text-decoration: none;
+}
+a img {
+    border: none;
+}
+p {
+    margin-bottom: 9px;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: #404040;
+    line-height: 36px;
+}
+h1 {
+    margin-bottom: 18px;
+    font-size: 30px;
+}
+h2 {
+    font-size: 24px;
+}
+h3 {
+    font-size: 18px;
+}
+h4 {
+    font-size: 16px;
+}
+h5 {
+    font-size: 14px;
+}
+h6 {
+    font-size: 13px;
+}
+hr {
+    margin: 0 0 19px;
+    border: 0;
+    border-bottom: 1px solid #ccc;
+}
+blockquote {
+    padding: 13px 13px 21px 15px;
+    margin-bottom: 18px;
+    font-family:georgia,serif;
+    font-style: italic;
+}
+blockquote:before {
+    content:"\201C";
+    font-size:40px;
+    margin-left:-10px;
+    font-family:georgia,serif;
+    color:#eee;
+}
+blockquote p {
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 18px;
+    margin-bottom: 0;
+    font-style: italic;
+}
+code, pre {
+    font-family: Monaco, Andale Mono, Courier New, monospace;
+}
+code {
+    background-color: #fee9cc;
+    color: rgba(0, 0, 0, 0.75);
+    padding: 1px 3px;
+    font-size: 12px;
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border-radius: 3px;
+}
+pre {
+    display: block;
+    padding: 14px;
+    margin: 0 0 18px;
+    line-height: 16px;
+    font-size: 11px;
+    border: 1px solid #d9d9d9;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+pre code {
+    background-color: #fff;
+    color:#737373;
+    font-size: 11px;
+    padding: 0;
+}
+sup {
+    font-size: 0.83em;
+    vertical-align: super;
+    line-height: 0;
+}
+* {
+	-webkit-print-color-adjust: exact;
+}
+@media screen and (min-width: 914px) {
+    body {
+        width: 854px;
+        margin:10px auto;
+    }
+}
+@media print {
+	body,code,pre code,h1,h2,h3,h4,h5,h6 {
+		color: black;
+	}
+	table, pre {
+		page-break-inside: avoid;
+	}
+}
+</style>
+<title>Push Protocol</title>
+
+</head>
+<body>
+<h2>Push Protocol</h2>
+
+<h4>1. 角色</h4>
+
+<p>以broker 作为server 端<br/>
+app client 和 worker 皆为客户端</p>
+
+<p>client 向 server 端发送的命令为纯文本内容方便利用 nc/telnet/tcpdump 等工具进行调度与查看。<br/>
+连接建立后，client 必须发送一个4字节的"magic" 的标识通信协议的版本。<br/>
+client 每隔5分钟 向服务端发送心掉，服务端回复同样的心跳信息。
+client 发送心跳未收到回复时，将尝试重新连接 server.</p>
+
+<h4>2. TCP 协议</h4>
+
+<h5>版本号约定</h5>
+
+<p><code>
+[space][space][V][1]
+</code></p>
+
+<h5>客户端心跳包</h5>
+
+<p><code>
+H\n
+</code></p>
+
+<h5>IDENTIFY</h5>
+
+<p>更新客户端元数据，协商连接的特性（如：心跳间隔、SSL 或 启用压缩等）</p>
+
+<p><code>
+IDENTIFY\n<br/>
+[ 4-byte size in bytes ][ N-byte JSON data ]
+</code></p>
+
+<h5>SUB</h5>
+
+<p>client 订阅指定的channel</p>
+
+<p><code>
+SUB[space]&lt;channel_id>\ n</p>
+
+<p>&lt;channel_id>  - 订阅频道的ID(int64)
+</code></p>
+
+<p>Success Response:</p>
+
+<p><code>
+OK
+</code></p>
+
+<p>Error Response:</p>
+
+<p><code></p>
+
+<p>E_INVALID_CLIENT<br/>
+E_BAD_CHANNEL
+</code></p>
+
+<h5>PUB</h5>
+
+<p>client 发送消息给指定的client, channel</p>
+
+<p><code>
+PUB[space]&lt;client_id> [space]&lt;channel_id>[space]&lt;message_id>\n<br/>
+[ 4-byte size in bytes ][ N-byte message data ]</p>
+
+<p>&lt;client_id>  - 目标client的ID(int64)<br/>
+&lt;channel_id>  - 目标channel的ID(int64)<br/>
+&lt;message_id>  - message的ID(int64)<br/>
+</code></p>
+
+<p>Success Response:</p>
+
+<p><code>
+ACK &lt;message_id>
+</code></p>
+
+<p>Error Response:</p>
+
+<p><code></p>
+
+<p>  OFF &lt;message_id><br/>
+  ERR &lt;message_id>
+</code></p>
+
+<h5>CLS</h5>
+
+<p>client 关闭连接</p>
+
+<p><code>
+CLS\n
+</code></p>
+
+<p>Success Responses:</p>
+
+<p><code>
+CLOSE_WAIT
+</code></p>
+
+<p>Error Responses:</p>
+
+<p><code>
+E_INVALID
+</code></p>
+
+<h4>数据格式</h4>
+
+<p>定义为数据帧的结构以支持不同的内容</p>
+
+<pre>
+[x][x][x][x][x][x][x][x][x][x][x][x]...
+|  (int32) ||  (int32) || (binary)
+|  4-byte  ||  4-byte  || N-byte
+------------------------------------...
+    size     frame type     data
+</pre>
+
+
+<p>client 会收到如下的数据帧类型：</p>
+
+<pre>
+    // when successful
+    FrameTypeResponse int32 = 0
+    // when an error occurred
+    FrameTypeError int32 = 1
+    // when it's a serialized message
+    FrameTypeMessage int32 = 2
+    // when ack a put message success/failure
+    FrameTypeAck int32 = 3
+</pre>
+
+
+<p>message 的格式</p>
+
+<pre>
+[x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x]...
+|       (int64)        ||    ||      (hex string encoded in ASCII)           || (binary)
+|       8-byte         ||    ||                 16-byte                      || N-byte
+------------------------------------------------------------------------------------------...
+  nanosecond timestamp    ^^                   message ID                       message body
+                       (uint16)
+                        2-byte
+                       attempts
+</pre>
+
+
+<h4>3.HTTP协议</h4>
+
+<h5>3.1 client 注册设备</h5>
+
+<p>Router负责设备的注册并分配给设备一个可连接的Broker地址。</p>
+
+<p>URL: /registration<br/>
+Method: POST<br/>
+Parmas:</p>
+
+<ul>
+<li>device_type（0：Android，1：iOS）</li>
+<li>serial_num（手机序列号）</li>
+<li>apns_token（iOS设备从APNs获取的device token）</li>
+<li>appid（应用的ID）</li>
+</ul>
+
+
+<p>返回</p>
+
+<p><code>
+{broker:"b1.zhan.sohu.com",devid:1030391111929}//iOS设备不需要返回broker
+</code></p>
+
+<h5>3.2 业务逻辑发消息</h5>
+
+<p>业务线推送消息给client<br/>
+URL: /put<br/>
+Method: POST <br/>
+Parmas:</p>
+
+<ul>
+<li>channel_id 推送频道的ID</li>
+<li>device_type 目标设备类型（0：Android，1：iOS）</li>
+<li>sign 请求签名，用于验证是从可信来源发送的</li>
+</ul>
+
+
+<p>Body: 推送消息的内容</p>
+
+<h4>参考资料</h4>
+
+<p><a href="http://bitly.github.io/nsq/clients/tcp_protocol_spec.html">NSQ TCP Protocol Spec</a></p>
+</body>
+</html>
