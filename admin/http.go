@@ -142,19 +142,25 @@ func (s *httpServer) messageListHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 	skip, limit := GetSkipLimit(reqParams)
-	result, err := model.GetMessageByChannelId(id, skip, limit)
+	messages, err := model.GetMessageByChannelId(id, skip, limit)
 	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	for _, m := range *result {
-		m.OK, m.Err, err = model.GetMsgOKErrCount(m.ID)
-		log.Debug("%d %d\n", m.ID, m.CreatedAt)
+	for i := 0; i < len(*messages); i++ {
+		(*messages)[i].OK, (*messages)[i].Err = model.GetMsgOKErrCount((*messages)[i].ID)
 	}
 
-	r, err := json.Marshal(result)
+	// for _, m := range *result {
+	// 	m.OK, m.Err, err = model.GetMsgOKErrCount(m.ID)
+	// 	if err != nil {
+	// 		log.Error("msg ok err count is error: %s", err.Error())
+	// 	}
+	// }
+
+	r, err := json.Marshal(messages)
 	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
@@ -346,6 +352,18 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+
+		for i := 0; i < len(*messages); i++ {
+			(*messages)[i].OK, (*messages)[i].Err = model.GetMsgOKErrCount((*messages)[i].ID)
+		}
+
+		// for _, m := range *messages {
+		// 	m.OK, m.Err, err = model.GetMsgOKErrCount(m.ID)
+		// 	if err != nil {
+		// 		log.Error(err.Error())
+		// 	}
+		// 	// log.Debug("mid:%d mcreateat%d\n", m.ID, m.CreatedAt)
+		// }
 
 		subs, err := model.GetSubscribeByChannelId(channel.ID, 0, 10)
 		if err != nil {
