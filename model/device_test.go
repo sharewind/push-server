@@ -3,6 +3,7 @@ package model
 import (
 	// "fmt"
 	// "github.com/op/go-logging"
+	"runtime"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ func TestFindDeviceIDBySerialNO(t *testing.T) {
 }
 
 func BenchmarkSaveDevice(b *testing.B) {
+	runtime.GOMAXPROCS(16)
 	factory := &util.GuidFactory{}
 	device := &Device{
 		ID:               int64(1),
