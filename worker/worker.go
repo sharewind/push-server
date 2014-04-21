@@ -608,7 +608,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 			params := bytes.Split(data, separatorBytes)
 			ackType, err := strconv.ParseInt(string(params[0]), 10, 64)
 			clientId, err := strconv.ParseInt(string(params[1]), 10, 64)
-			msgId, err := strconv.ParseInt(string(params[1]), 10, 64)
+			msgId, err := strconv.ParseInt(string(params[2]), 10, 64)
 			if err != nil {
 				log.Debug("ERROR: parse msgId error %s", err)
 				break

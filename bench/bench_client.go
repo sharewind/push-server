@@ -36,14 +36,6 @@ func main() {
 
 }
 
-func wrapperFunc() {
-	defer func() {
-		fmt.Println("warp func done !")
-	}()
-	go createClient()
-
-}
-
 var count = 0
 
 func createClient() {
