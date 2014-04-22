@@ -7,6 +7,9 @@ apps/worker/worker
 apps/api/api
 apps/admin/admin
 apps/*/*.log
+bench/bench
+bench/bench_mongo
+bench/bench_client
 test/*
 dist
 tags
