@@ -23,7 +23,7 @@ func TCPServer(listener net.Listener, handler TCPHandler) {
 			}
 			// theres no direct way to detect this error because it is not exposed
 			if !strings.Contains(err.Error(), "use of closed network connection") {
-				log.Debug("ERROR: listener.Accept() - %s", err.Error())
+				log.Error("listener.Accept() - %s", err.Error())
 			}
 			break
 		}

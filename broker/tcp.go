@@ -21,7 +21,7 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 	buf := make([]byte, 4)
 	_, err := io.ReadFull(clientConn, buf)
 	if err != nil {
-		log.Debug("ERROR: failed to read protocol version - %s", err.Error())
+		log.Error("failed to read protocol version - %s", err.Error())
 		return
 	}
 	protocolMagic := string(buf)
@@ -35,13 +35,13 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 	default:
 		util.SendFramedResponse(clientConn, util.FrameTypeError, []byte("E_BAD_PROTOCOL"))
 		clientConn.Close()
-		log.Debug("ERROR: client(%s) bad protocol magic '%s'", clientConn.RemoteAddr(), protocolMagic)
+		log.Error("client(%s) bad protocol magic '%s'", clientConn.RemoteAddr(), protocolMagic)
 		return
 	}
 
 	err = prot.IOLoop(clientConn)
 	if err != nil {
-		log.Debug("ERROR: client(%s) - %s", clientConn.RemoteAddr(), err.Error())
+		log.Error("client(%s) - %s", clientConn.RemoteAddr(), err.Error())
 		return
 	}
 }

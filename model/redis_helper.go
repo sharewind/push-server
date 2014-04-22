@@ -108,7 +108,7 @@ func GetOfflineMessages(clientID int64) (messageIDs []int64, err error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("INFO: GetOfflineMessages key %s reply %#v", key, values)
+	log.Info("GetOfflineMessages key %s reply %#v", key, values)
 
 	for len(values) > 0 {
 		var id int64
@@ -132,7 +132,7 @@ func IncrMsgOKCount(messageID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Debug("INFO: IncrMsgOKCount key %s reply %d", key, reply)
+	log.Info("IncrMsgOKCount key %s reply %d", key, reply)
 	return reply, err
 }
 
@@ -145,7 +145,7 @@ func IncrMsgErrCount(messageID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Debug("INFO: IncrMsgErrCount key %s reply %d", key, reply)
+	log.Info("IncrMsgErrCount key %s reply %d", key, reply)
 	return reply, err
 }
 
@@ -159,7 +159,7 @@ func GetMsgOKErrCount(messageID int64) (okCount int, errCount int) {
 		okCount = 0
 		log.Error(err.Error())
 	}
-	log.Debug("INFO: getMsgOKCount key %s reply %d", key, okCount)
+	log.Info("getMsgOKCount key %s reply %d", key, okCount)
 
 	key = fmt.Sprintf("m:err:%d", messageID)
 	errCount, err = redis.Int(conn.Do("get", key))
@@ -167,7 +167,7 @@ func GetMsgOKErrCount(messageID int64) (okCount int, errCount int) {
 		errCount = 0
 		log.Error(err.Error())
 	}
-	log.Debug("INFO: getMsgErrCount key %s reply %d", key, errCount)
+	log.Info("getMsgErrCount key %s reply %d", key, errCount)
 	return okCount, errCount
 }
 
@@ -180,7 +180,7 @@ func IncrClientOKCount(clientID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Debug("INFO: IncrClientOKCount key %s reply %d", key, reply)
+	log.Info("IncrClientOKCount key %s reply %d", key, reply)
 	return reply, err
 }
 
@@ -193,6 +193,6 @@ func IncrClientErrCount(clientID int64, delta int) (reply int, err error) {
 	if err != nil {
 		return -1, err
 	}
-	log.Debug("INFO: IncrClientErrCount key %s reply %d", key, reply)
+	log.Info("IncrClientErrCount key %s reply %d", key, reply)
 	return reply, err
 }

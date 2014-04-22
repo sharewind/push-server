@@ -11,7 +11,7 @@ var (
 	mgoSession *mgo.Session
 	//databaseServer = "mongodb://192.168.230.52:27017,192.168.230.53:27017,192.168.230.54:27017?connect=replicaSet"
 	databaseServer = "mongodb://10.10.69.191:27017,10.10.69.191:27018?connect=replicaSet"
-	// databaseServer = "mongodb://127.0.0.1:27017"
+	// databaseServer = "mongodb://10.2.58.178:27017"
 	databaseName = "push"
 	mux          sync.Mutex
 	pool         *util.Semaphore

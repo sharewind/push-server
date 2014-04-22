@@ -312,26 +312,28 @@ exit:
 	log.Debug("ID: closing")
 }
 
-func (w *Worker) SafeConnectToBroker(addr string) {
-	go func(addr string) {
-		for {
-			if atomic.LoadInt32(&w.stopFlag) == 1 {
-				break
-			}
-			err := w.ConnectToBroker(addr)
-			if err == nil {
-				log.Debug("INFO: connect to %s success ", addr)
-				break
-			}
+func (w *Worker) SafeConnectToBroker(addr []string) {
+	for i := 0; i < len(addr); i++ {
+		go func(addr string) {
+			for {
+				if atomic.LoadInt32(&w.stopFlag) == 1 {
+					break
+				}
+				err := w.ConnectToBroker(addr)
+				if err == nil {
+					log.Info("connect to %s success ", addr)
+					break
+				}
 
-			if err != nil && err != ErrAlreadyConnected {
-				log.Debug("ERROR: failed to connect to %s - %s", addr, err.Error())
-			}
+				if err != nil && err != ErrAlreadyConnected {
+					log.Debug("ERROR: failed to connect to %s - %s", addr, err.Error())
+				}
 
-			log.Debug("[%s] re-connecting in 15 seconds...", addr)
-			time.Sleep(15 * time.Second)
-		}
-	}(addr)
+				log.Debug("[%s] re-connecting in 15 seconds...", addr)
+				time.Sleep(15 * time.Second)
+			}
+		}(addr[i])
+	}
 }
 
 // ConnectToNSQ takes a nsqd address to connect directly to.
@@ -553,10 +555,10 @@ exit:
 
 func (w *Worker) readLoop(c *nsqConn) {
 	for {
-		log.Debug("INFO: [%s] client readLoop", c)
+		log.Info("[%s] client readLoop", c)
 
 		if atomic.LoadInt32(&w.stopFlag) == 1 || atomic.LoadInt32(&c.stopFlag) == 1 {
-			log.Debug("INFO: [%s] stopBrokerConn on client stopFlag ", c)
+			log.Info("[%s] stopBrokerConn on client stopFlag ", c)
 			w.stopBrokerConn(c)
 			goto exit
 		}
@@ -579,7 +581,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 			}
 
 			// if q.VerboseLogging {
-			log.Debug("INFO: [%s] FrameTypeMessage receive  %s - %s", c, msg.Id, msg.Body)
+			log.Info("[%s] FrameTypeMessage receive  %s - %s", c, msg.Id, msg.Body)
 			// }
 
 			// remain := atomic.AddInt64(&c.rdyCount, -1)

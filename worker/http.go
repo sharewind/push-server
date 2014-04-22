@@ -95,7 +95,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/debug/pprof/threadcreate":
 		httpprof.Handler("threadcreate").ServeHTTP(w, req)
 	default:
-		log.Debug("ERROR: 404 %s", req.URL.Path)
+		log.Error("404 %s", req.URL.Path)
 		util.ApiResponse(w, 404, NotFound, Msg[NotFound], nil)
 	}
 }
@@ -215,7 +215,7 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if int64(len(body)) == readMax {
-		log.Debug("ERROR: /put hit max message size")
+		log.Error("/put hit max message size")
 		util.ApiResponse(w, 400, MsgErr, Msg[MsgErr], nil)
 		return
 	}
@@ -226,34 +226,34 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {
-		log.Debug("ERROR: failed to parse request params - %s", err.Error())
+		log.Error("failed to parse request params - %s", err.Error())
 		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
 		return
 	}
 
 	channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
 	if err != nil {
-		log.Debug("ERROR: failed to parse channel_id params - %s", err.Error())
+		log.Error("failed to parse channel_id params - %s", err.Error())
 		util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
 		return
 	}
 	_, err = model.FindChannelByID(channel_id)
 	if err != nil {
-		log.Debug("ERROR: can not find channel  - %s", err.Error())
+		log.Error("can not find channel  - %s", err.Error())
 		util.ApiResponse(w, 400, NoSubErr, Msg[NoSubErr], nil)
 		return
 	}
 
 	// push_type, err := strconv.ParseInt(reqParams.Get("push_type"), 10, 8)
 	// if err != nil {
-	// 	log.Debug("ERROR: failed to parse push_type params - %s", err.Error())
+	// 	log.Error("failed to parse push_type params - %s", err.Error())
 	// 	util.ApiResponse(w, 400, "INVALID_REQUEST", nil)
 	// 	return
 	// }
 
 	device_type, err := strconv.ParseInt(reqParams.Get("device_type"), 10, 8)
 	if err != nil {
-		log.Debug("ERROR: failed to parse device_type params - %s", err.Error())
+		log.Error("failed to parse device_type params - %s", err.Error())
 		util.ApiResponse(w, 400, DeviceTypeErr, Msg[DeviceTypeErr], nil)
 		return
 	}
@@ -268,7 +268,7 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	err = model.SaveMessage(msg)
 	if err != nil {
-		log.Debug("ERROR: failed to SaveMessage %#v ,err=%s", msg, err.Error())
+		log.Error("failed to SaveMessage %#v ,err=%s", msg, err.Error())
 		util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
 		return
 	}

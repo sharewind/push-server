@@ -100,7 +100,7 @@ func (c *Client) Connect() error {
 	log.Debug("[%s] connecting...", c)
 	conn, err := net.DialTimeout("tcp", c.Addr, time.Second*5)
 	if err != nil {
-		log.Debug("ERROR: [%s] failed to dial %s - %s", c, c.Addr, err)
+		log.Error("[%s] failed to dial %s - %s", c, c.Addr, err)
 		atomic.StoreInt32(&c.state, StateInit)
 		return err
 	}
@@ -111,7 +111,7 @@ func (c *Client) Connect() error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	_, err = c.Write(MagicV1)
 	if err != nil {
-		log.Debug("ERROR: [%s] failed to write magic - %s", c, err)
+		log.Error("[%s] failed to write magic - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -123,7 +123,7 @@ func (c *Client) Connect() error {
 	ci["role"] = "client"
 	cmd, err := Identify(ci)
 	if err != nil {
-		log.Debug("ERROR: [%s] failed to create IDENTIFY command - %s", c, err)
+		log.Error("[%s] failed to create IDENTIFY command - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -131,7 +131,7 @@ func (c *Client) Connect() error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err = cmd.Write(c)
 	if err != nil {
-		log.Debug("ERROR: [%s] failed to write IDENTIFY - %s", c, err)
+		log.Error("[%s] failed to write IDENTIFY - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -139,20 +139,20 @@ func (c *Client) Connect() error {
 	c.SetReadDeadline(time.Now().Add(c.HeartbeatInterval * 2))
 	resp, err := ReadResponse(c)
 	if err != nil {
-		log.Debug("ERROR: [%s] failed to read IDENTIFY response - %s", c, err)
+		log.Error("[%s] failed to read IDENTIFY response - %s", c, err)
 		c.Close()
 		return err
 	}
 
 	frameType, data, err := UnpackResponse(resp)
 	if err != nil {
-		log.Debug("ERROR: [%s] failed to unpack IDENTIFY response - %s", c, resp)
+		log.Error("[%s] failed to unpack IDENTIFY response - %s", c, resp)
 		c.Close()
 		return err
 	}
 
 	if frameType == FrameTypeError {
-		log.Debug("ERROR: [%s] IDENTIFY returned error response - %s", c, data)
+		log.Error("[%s] IDENTIFY returned error response - %s", c, data)
 		c.Close()
 		return errors.New(string(data))
 	}
@@ -170,7 +170,7 @@ func (c *Client) Register(addr string) error {
 
 	data, err := ApiPostRequest(endpoint)
 	if err != nil {
-		log.Debug("ERROR: Register %s - %s - %s", addr, err.Error(), data)
+		log.Error("Register %s - %s - %s", addr, err.Error(), data)
 		return err
 	}
 
@@ -184,11 +184,11 @@ func (c *Client) Subscribe(channel_id int64) error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err := cmd.Write(c)
 	if err != nil {
-		log.Debug("ERROR: [%s] failed to write Subscribe - %s", c, err)
+		log.Error("[%s] failed to write Subscribe - %s", c, err)
 		c.Close()
 		return err
 	}
-	log.Debug("INFO: [%s] success to write Subscribe ", c)
+	log.Info("[%s] success to write Subscribe ", c)
 	return nil
 }
 
@@ -219,7 +219,7 @@ func (c *Client) messagePump() {
 			c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 			err = cmd.Write(c)
 			if err != nil {
-				log.Debug("ERROR: [%s] failed to write HeartBeat - %s", c, err)
+				log.Error("[%s] failed to write HeartBeat - %s", c, err)
 				goto exit
 			}
 			// shoud receive response
@@ -257,7 +257,7 @@ func (c *Client) readLoop() {
 			msg, err := broker.DecodeMessage(data)
 			// msg.cmdChan = c.cmdChan
 			// msg.responseChan = c.finishedMessages
-			log.Debug("INFO: [%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
+			log.Info("[%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
 			if err != nil {
 				// handleError(q, c, fmt.Sprintf("[%s] error (%s) decoding message %s",
 				// 	c, err.Error(), data))

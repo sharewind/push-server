@@ -24,7 +24,7 @@ func FindChannelByID(ID int64) (result *Channel, err error) {
 	}
 	err = withCollection("channels", query)
 	if err != nil {
-		log.Error("ERROR: FindChannelByID %s", err)
+		log.Error("FindChannelByID %s", err)
 	}
 	return result, err
 }

@@ -62,7 +62,7 @@ func (p *PushAPI) idPump() {
 			now := time.Now()
 			if now.Sub(lastError) > time.Second {
 				// only print the error once/second
-				log.Debug("ERROR: %s", err.Error())
+				log.Error("%s", err.Error())
 				lastError = now
 			}
 			runtime.Gosched()

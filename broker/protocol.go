@@ -48,7 +48,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 	// <-messagePumpStartedChan
 
 	for {
-		// log.Debug("INFO: client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
+		// log.Info("client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
 		if client.HeartbeatInterval > 0 {
 			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2))
 		} else {
@@ -80,7 +80,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 			if parentErr := err.(util.ChildErr).Parent(); parentErr != nil {
 				context = " - " + parentErr.Error()
 			}
-			log.Debug("ERROR: [%s] - %s%s", client, err.Error(), context)
+			log.Error("[%s] - %s%s", client, err.Error(), context)
 
 			sendErr := p.Send(client, util.FrameTypeError, []byte(err.Error()))
 			if sendErr != nil {
@@ -97,7 +97,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		if response != nil {
 			err = p.Send(client, util.FrameTypeResponse, response)
 			if err != nil {
-				log.Debug("ERROR: send response to client error %s ", err)
+				log.Error("send response to client error %s ", err)
 				break
 			}
 		}
@@ -373,13 +373,13 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	p.context.broker.AddClient(client.ClientID, channel_id, client)
-	log.Debug("INFO: clientId %d sub channel %d success ", client.ClientID, channel_id)
+	log.Info("clientId %d sub channel %d success ", client.ClientID, channel_id)
 
 	// touch devie online
 	model.TouchDeviceOnline(client_id)
 
 	// should send client connected eventsf
-	log.Debug("INFO: SetClientConn clientID=%d, broker_addr=%d", client.ClientID, client.LocalAddr().String())
+	log.Info("SetClientConn clientID=%d, broker_addr=%d", client.ClientID, client.LocalAddr().String())
 	err = model.SetClientConn(client.ClientID, client.LocalAddr().String())
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
@@ -407,7 +407,7 @@ func (p *protocol) checkOfflineMessage(client *client) {
 
 	messageIDs, err := model.GetOfflineMessages(client.ClientID)
 	if err != nil || messageIDs == nil {
-		log.Debug("ERROR: GetOfflineMessages clientID %d error %d ", client.ClientID, err)
+		log.Error("GetOfflineMessages clientID %d error %d ", client.ClientID, err)
 		return
 	}
 
@@ -415,13 +415,13 @@ func (p *protocol) checkOfflineMessage(client *client) {
 	for _, messageID := range messageIDs {
 		msg, err := model.FindMessageByID(messageID)
 		if err != nil || msg == nil {
-			log.Debug("ERROR: client %s message ID %d message doesn't exist, err %s", client.ClientID, messageID, err)
+			log.Error("client %s message ID %d message doesn't exist, err %s", client.ClientID, messageID, err)
 			continue
 		}
 
 		// live := msg.CreatedAt + msg.Expires*100000000000000
 		// if time.Now().UnixNano() > live {
-		// 	log.Debug("ERROR: client %s message ID %d message expired.", client.ClientID, messageID)
+		// 	log.Error("client %s message ID %d message expired.", client.ClientID, messageID)
 		// 	model.RemoveOfflineMessage(client.ClientID, messageID)
 		// 	continue
 		// }
@@ -438,7 +438,7 @@ func (p *protocol) checkOfflineMessage(client *client) {
 		log.Debug("msg is %#v", msg2)
 		err = p.SendMessage(client, msg2, &buf)
 		if err != nil {
-			log.Debug("send message to client %s error  %s", client, err)
+			log.Error("send message to client %s error  %s", client, err)
 		}
 
 		client.Lock()
@@ -545,7 +545,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	// dstClient.SendingMessage()
 	err = p.SendMessage(dstClient, msg, &buf)
 	if err != nil {
-		log.Debug("send message to client %s error  %s", dstClient, err)
+		log.Error("send message to client %s error  %s", dstClient, err)
 	}
 
 	dstClient.Lock()
@@ -564,7 +564,7 @@ func (p *protocol) ackPublish(client *client, ackType int32, clientID int64, msg
 	response := []byte(fmt.Sprintf("%d %d %d", ackType, clientID, msgID))
 	err = p.Send(client, util.FrameTypeAck, response)
 	if err != nil {
-		log.Debug("ERROR: send response to client error %s ", err)
+		log.Error("send response to client error %s ", err)
 		p.cleanupClientConn(client)
 	}
 	return err

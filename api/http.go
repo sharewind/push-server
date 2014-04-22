@@ -82,7 +82,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/debug/pprof/threadcreate":
 		httpprof.Handler("threadcreate").ServeHTTP(w, req)
 	default:
-		log.Debug("ERROR: 404 %s", req.URL.Path)
+		log.Error("404 %s", req.URL.Path)
 		util.ApiResponse(w, 404, NotFound, Msg[NotFound], nil)
 	}
 }
@@ -102,7 +102,7 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 
 // curl -X POST http://localhost:4171/registration?serial_no=SOHUNO20140401XX&device_type=3&device_name=搜狐Android测试机
 func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
-	log.Debug("INFO: request %s ", req.URL.RawQuery)
+	log.Info("request %s ", req.URL.RawQuery)
 
 	if req.Method != "POST" {
 		util.ApiResponse(w, 405, MethodErr, Msg[MethodErr], nil)
@@ -111,7 +111,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {
-		log.Debug("ERROR: failed to parse request params - %s", err.Error())
+		log.Error("failed to parse request params - %s", err.Error())
 		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
 		return
 	}
@@ -138,19 +138,19 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 
 	var device *model.Device = nil
 	deviceID, err := model.FindDeviceIDBySerialNO(serial_no)
-	log.Debug("INFO: FindDeviceIDBySerialNO %s result %s", serial_no, deviceID)
+	log.Info("FindDeviceIDBySerialNO %s result %s", serial_no, deviceID)
 
 	if err == nil && deviceID != 0 {
 		device, err = model.FindDeviceByID(deviceID)
-		// log.Debug("INFO: FindDeviceByID %d result %#v", deviceID, device)
+		// log.Info("FindDeviceByID %d result %#v", deviceID, device)
 		if err != nil || device == nil {
-			log.Debug("ERROR: FindDeviceByID error %s", err)
+			log.Error("FindDeviceByID error %s", err)
 			util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
 			return
 		}
 	}
 
-	// log.Debug("INFO: exist_device %#v", device)
+	// log.Info("exist_device %#v", device)
 	if device == nil {
 		device = &model.Device{
 			ID:              <-s.context.api.idChan,
@@ -162,7 +162,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 		}
 		err = model.SaveDevice(device)
 		if err != nil {
-			log.Debug("ERROR: SaveDevice %s error %s", device, err)
+			log.Error("SaveDevice %s error %s", device, err)
 			util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
 			return
 		}

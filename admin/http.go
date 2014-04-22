@@ -90,7 +90,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/":
 		s.indexHandler(w, req)
 	default:
-		log.Debug("ERROR: 404 %s", req.URL.Path)
+		log.Error("404 %s", req.URL.Path)
 		http.NotFound(w, req)
 	}
 }
@@ -98,7 +98,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (s *httpServer) messageHandler(w http.ResponseWriter, req *http.Request) {
 	reqParams, err := util.NewReqParams(req)
 	if err != nil {
-		log.Debug("ERROR: failed to parse request params - %s", err.Error())
+		log.Error("failed to parse request params - %s", err.Error())
 		http.Error(w, "INVALID_REQUEST", 500)
 		return
 	}
@@ -166,7 +166,7 @@ func (s *httpServer) messageListHandler(w http.ResponseWriter, req *http.Request
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	log.Debug(string(r))
+	// log.Debug(string(r))
 	io.WriteString(w, string(r))
 	return
 
@@ -257,7 +257,7 @@ func (s *httpServer) indexHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	err = templates.T.ExecuteTemplate(w, "index.html", p)
 	if err != nil {
-		log.Debug("Template Error %s", err.Error())
+		log.Error("Template Error %s", err.Error())
 		http.Error(w, "Template Error", 500)
 	}
 }
@@ -266,7 +266,7 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method == "POST" {
 		reqParams, err := util.NewReqParams(req)
 		if err != nil {
-			log.Debug("ERROR: failed to parse request params - %s", err.Error())
+			log.Error("failed to parse request params - %s", err.Error())
 			http.Error(w, "INVALID_REQUEST", 500)
 			return
 		}
@@ -279,7 +279,7 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		if key != "10000001" {
-			log.Debug("key %s error", key)
+			log.Error("key %s error", key)
 			http.Error(w, "key error", 500)
 		}
 
@@ -399,7 +399,7 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 		}
 		err = templates.T.ExecuteTemplate(w, "channel.html", p)
 		if err != nil {
-			log.Debug("Template Error %s", err.Error())
+			log.Error("Template Error %s", err.Error())
 			http.Error(w, "Template Error", 500)
 		}
 	}
