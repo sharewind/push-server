@@ -7,13 +7,10 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"strconv"
-	// "math/rand"
 	"net"
+	"strconv"
 	"sync/atomic"
 	"time"
-	// "unsafe"
-	// "github.com/bitly/go-nsq"
 
 	"code.sohuno.com/kzapp/push-server/model"
 	"code.sohuno.com/kzapp/push-server/util"
@@ -34,18 +31,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 	var line []byte
 	var zeroTime time.Time
 
-	// clientID := atomic.AddInt64(&p.context.broker.clientIDSequence, 1)
 	client := newClient(conn, p.context)
-
-	// synchronize the startup of messagePump in order
-	// to guarantee that it gets a chance to initialize
-	// goroutine local state derived from client attributes
-	// and avoid a potential race with IDENTIFY (where a client
-	// could have changed or disabled said attributes)
-
-	// messagePumpStartedChan := make(chan bool)
-	// go p.messagePump(client, messagePumpStartedChan)
-	// <-messagePumpStartedChan
 
 	for {
 		// log.Info("client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
@@ -117,15 +103,12 @@ func (p *protocol) cleanupClientConn(client *client) {
 	model.TouchDeviceOffline(client.ClientID)
 
 	close(client.ExitChan)
-	// if client.Channel != nil {
-	// 	client.Channel.RemoveClient(client.ID)
-	// }
 }
 
 func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
 	// if p.context.broker.options.Verbose {
-	log.Debug("PROTOCOL(V2): writing msg(%s) to client(%s) - %s",
-		msg.Id, client, msg.Body)
+	// log.Debug("PROTOCOL(V2): writing msg(%s) to client(%s) - %s",
+	// msg.Id, client, msg.Body)
 	// }
 
 	buf.Reset()
@@ -139,8 +122,7 @@ func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) 
 		return err
 	}
 
-	log.Debug("PROTOCOL(V2): Success writing msg(%s) to client(%s) - %s",
-		msg.Id, client, msg.Body)
+	log.Debug("PROTOCOL(V2): Success writing msg(%s) to client(%s) - %s", msg.Id, client, msg.Body)
 	return nil
 }
 
@@ -167,20 +149,10 @@ func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
 	switch {
 	case bytes.Equal(params[0], []byte("H")):
 		return p.HEARTBEAT(client, params)
-	case bytes.Equal(params[0], []byte("FIN")):
-		return p.FIN(client, params)
-	// case bytes.Equal(params[0], []byte("RDY")):
-	// 	return p.RDY(client, params)
-	// case bytes.Equal(params[0], []byte("REQ")):
-	// 	return p.REQ(client, params)
 	case bytes.Equal(params[0], []byte("PUB")):
 		return p.PUB(client, params)
-	// case bytes.Equal(params[0], []byte("MPUB")):
-	// 	return p.MPUB(client, params)
 	case bytes.Equal(params[0], []byte("NOP")):
 		return p.NOP(client, params)
-	// case bytes.Equal(params[0], []byte("TOUCH")):
-	// 	return p.TOUCH(client, params)
 	case bytes.Equal(params[0], []byte("IDENTIFY")):
 		return p.IDENTIFY(client, params)
 	case bytes.Equal(params[0], []byte("SUB")):
@@ -251,10 +223,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	resp, err := json.Marshal(struct {
-		// MaxRdyCount     int64  `json:"max_rdy_count"`
 		Version         string `json:"version"`
-		MaxMsgTimeout   int64  `json:"max_msg_timeout"`
-		MsgTimeout      int64  `json:"msg_timeout"`
 		TLSv1           bool   `json:"tls_v1"`
 		Deflate         bool   `json:"deflate"`
 		DeflateLevel    int    `json:"deflate_level"`
@@ -262,10 +231,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 		Snappy          bool   `json:"snappy"`
 		SampleRate      int32  `json:"sample_rate"`
 	}{
-		// MaxRdyCount:     p.context.broker.options.MaxRdyCount,
 		Version:         util.BINARY_VERSION,
-		MaxMsgTimeout:   int64(p.context.broker.options.MaxMsgTimeout / time.Millisecond),
-		MsgTimeout:      int64(p.context.broker.options.MsgTimeout / time.Millisecond),
 		TLSv1:           tlsv1,
 		Deflate:         deflate,
 		DeflateLevel:    deflateLevel,
@@ -338,8 +304,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "SUB insufficient number of parameters")
 	}
 
-	//TODO FIXME
-	channel_id, err := strconv.ParseInt(string(params[1]), 10, 64) //TODO need validate channel_id
+	channel_id, err := strconv.ParseInt(string(params[1]), 10, 64)
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
 	}
@@ -379,8 +344,8 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	model.TouchDeviceOnline(client_id)
 
 	// should send client connected eventsf
-	log.Info("SetClientConn clientID=%d, broker_addr=%d", client.ClientID, client.LocalAddr().String())
-	err = model.SetClientConn(client.ClientID, client.LocalAddr().String())
+	log.Info("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
+	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
@@ -406,8 +371,11 @@ func (p *protocol) checkOfflineMessage(client *client) {
 	var buf bytes.Buffer
 
 	messageIDs, err := model.GetOfflineMessages(client.ClientID)
-	if err != nil || messageIDs == nil {
+	if err != nil {
 		log.Error("GetOfflineMessages clientID %d error %d ", client.ClientID, err)
+		return
+	}
+	if messageIDs == nil {
 		return
 	}
 
@@ -457,32 +425,10 @@ func (p *protocol) HEARTBEAT(client *client, params [][]byte) ([]byte, error) {
 	return []byte("H"), nil
 }
 
-func (p *protocol) FIN(client *client, params [][]byte) ([]byte, error) {
-	state := atomic.LoadInt32(&client.State)
-	if state != StateSubscribed && state != StateClosing {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot FIN in current state")
-	}
-
-	if len(params) < 2 {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "FIN insufficient number of params")
-	}
-
-	// id := *(*MessageID)(unsafe.Pointer(&params[1][0]))
-	// err := client.Channel.FinishMessage(client.ID, id)
-	// if err != nil {
-	// 	return nil, util.NewClientErr(err, "E_FIN_FAILED",
-	// 		fmt.Sprintf("FIN %s failed %s", id, err.Error()))
-	// }
-
-	// client.FinishedMessage()
-
-	return nil, nil
-}
-
 func (p *protocol) CLS(client *client, params [][]byte) ([]byte, error) {
-	// if atomic.LoadInt32(&client.State) != StateSubscribed {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CLS in current state")
-	// }
+	if atomic.LoadInt32(&client.State) != StateSubscribed {
+		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CLS in current state")
+	}
 
 	client.StartClose()
 	return []byte("CLOSE_WAIT"), nil
@@ -524,15 +470,11 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	channel_id, _ := strconv.ParseInt(string(params[2]), 10, 64)
 	message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
 
-	// TODO 另外启动一个channel 与 goroutine 用来处理这个消息
 	dstClient, err := p.context.broker.GetClient(client_id, channel_id)
 	if err != nil || dstClient == nil {
 		p.ackPublish(client, util.ACK_OFF, client_id, message_id)
-		// model.SaveOfflineMessage(dstClient.ClientID, msgId)
 		log.Debug("client %s is null", client_id)
 		return nil, nil
-		//return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")
-		// 	return FrameTypeACKError message_id
 	}
 	log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, dstClient)
 
@@ -541,7 +483,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 		Body:      body,
 		Timestamp: time.Now().UnixNano(),
 	}
-	log.Debug("msg is %#v", msg)
+	// log.Debug("msg is %#v", msg)
 	// dstClient.SendingMessage()
 	err = p.SendMessage(dstClient, msg, &buf)
 	if err != nil {

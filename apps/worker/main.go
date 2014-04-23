@@ -16,12 +16,11 @@ var (
 	log     = logging.MustGetLogger("main")
 	flagSet = flag.NewFlagSet("worker", flag.ExitOnError)
 
-	config      = flagSet.String("config", "./worker.cfg", "path to config file")
+	config      = flagSet.String("config", "", "path to config file")
 	showVersion = flagSet.Bool("version", false, "print version string")
 
-	httpAddress      = flagSet.String("http-address", "", "<addr>:<port> to listen on for HTTP clients")
+	httpAddress      = flagSet.String("http-address", "0.0.0.0:8710", "<addr>:<port> to listen on for HTTP clients")
 	brokerTcpAddress = flagSet.String("broker-tcp-address", "", "<addr>:<port> to connect broker")
-	templateDir      = flagSet.String("template-dir", "", "path to templates directory")
 )
 
 func main() {
@@ -35,8 +34,6 @@ func main() {
 	}()
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// httpAddr := "0.0.0.0:8710"
-
 	var cfg map[string]interface{}
 	if *config != "" {
 		_, err := toml.DecodeFile(*config, &cfg)
@@ -46,10 +43,11 @@ func main() {
 	}
 
 	opts := worker.NewWorkerOptions()
-
 	options.Resolve(opts, flagSet, cfg)
 
+	log.Debug("options %#v", opts)
 	w := worker.NewWorker(opts)
+
 	w.Main()
 	log.Debug("opts.BrokerTcpAddress %s", opts.BrokerTcpAddress)
 	w.SafeConnectToBroker(opts.BrokerTcpAddress)

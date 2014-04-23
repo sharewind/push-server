@@ -1,23 +1,65 @@
 package main
 
 import (
-	"code.sohuno.com/kzapp/push-server/broker"
+	"flag"
+	"fmt"
+	"log"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
+
+	"code.sohuno.com/kzapp/push-server/broker"
+	"code.sohuno.com/kzapp/push-server/util"
+	"github.com/BurntSushi/toml"
+	"github.com/mreiferson/go-options"
 )
 
-//sh /opt/scripts/mongodb/mongodb.sh start
-//sh /opt/scripts/redis/redis.sh start
+var (
+	flagSet = flag.NewFlagSet("broker", flag.ExitOnError)
+
+	// pprof options
+	cpuprofile = flag.String("cpuprofile", "broker.prof", "write cpu profile to file")
+	memprofile = flag.String("memprofile", "broker.mprof", "write memory profile to this file")
+
+	// basic options
+	config      = flagSet.String("config", "", "path to config file")
+	showVersion = flagSet.Bool("version", false, "print version string")
+	verbose     = flagSet.Bool("verbose", false, "enable verbose logging")
+	workerId    = flagSet.Int64("worker-id", 0, "unique identifier (int) for this worker (will default to a hash of hostname)")
+	// httpAddress = flagSet.String("http-address", "0.0.0.0:4151", "<addr>:<port> to listen on for HTTP clients")
+	tcpAddress       = flagSet.String("tcp-address", "0.0.0.0:8600", "<addr>:<port> to listen on for TCP clients")
+	broadcastAddress = flagSet.String("broadcast-address", "", "address that will be locate client conn by worker")
+
+	maxBodySize = flagSet.Int64("max-body-size", 5*1024768, "maximum size of a single command body")
+
+	// TLS config
+	tlsCert = flagSet.String("tls-cert", "", "path to certificate file")
+	tlsKey  = flagSet.String("tls-key", "", "path to private key file")
+
+	// compression
+	deflateEnabled  = flagSet.Bool("deflate", true, "enable deflate feature negotiation (client compression)")
+	maxDeflateLevel = flagSet.Int("max-deflate-level", 6, "max deflate compression level a client can negotiate (> values == > nsqd CPU usage)")
+	snappyEnabled   = flagSet.Bool("snappy", true, "enable snappy feature negotiation (client compression)")
+)
+
 func main() {
-	// flagSet.Parse(os.Args[1:])
 
-	// rand.Seed(time.Now().UTC().UnixNano())
+	flagSet.Parse(os.Args[1:])
 
-	// if *showVersion {
-	// 	fmt.Println(util.Version("nsqd"))
-	// 	return
-	// }
+	if *showVersion {
+		fmt.Println(util.Version("broker"))
+		return
+	}
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	//
 	exitChan := make(chan int)
@@ -28,30 +70,32 @@ func main() {
 	}()
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// var cfg map[string]interface{}
-	// if *config != "" {
-	// 	_, err := toml.DecodeFile(*config, &cfg)
-	// 	if err != nil {
-	// 		log.Fatalf("ERROR: failed to load config file %s - %s", *config, err.Error())
-	// 	}
-	// }
+	var cfg map[string]interface{}
+	if *config != "" {
+		_, err := toml.DecodeFile(*config, &cfg)
+		if err != nil {
+			log.Fatalf("ERROR: failed to load config file %s - %s", *config, err.Error())
+		}
+	}
 
 	opts := broker.NewBrokerOptions()
-	// options.Resolve(opts, flagSet, cfg)
-	opts.TCPAddress = "0.0.0.0:8600"
-	opts.HTTPAddress = "0.0.0.0:8601"
+	options.Resolve(opts, flagSet, cfg)
 	b := broker.NewBroker(opts)
 
-	// log.Println(util.Version("nsqd"))
+	log.Println(util.Version("broker"))
 	// log.Debug("worker id %d", opts.ID)
 
-	// nsqd.LoadMetadata()
-	// err := nsqd.PersistMetadata()
-	// if err != nil {
-	// 	log.Fatalf("ERROR: failed to persist metadata - %s", err.Error())
-	// }
 	b.Main()
 	<-exitChan
 	b.Exit()
 
+	// if *memprofile != "" {
+	// 	f, err := os.Create(*memprofile)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	pprof.WriteHeapProfile(f)
+	// 	defer f.Close()
+	// 	return
+	// }
 }

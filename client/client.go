@@ -255,8 +255,6 @@ func (c *Client) readLoop() {
 		switch frameType {
 		case FrameTypeMessage:
 			msg, err := broker.DecodeMessage(data)
-			// msg.cmdChan = c.cmdChan
-			// msg.responseChan = c.finishedMessages
 			log.Info("[%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
 			if err != nil {
 				// handleError(q, c, fmt.Sprintf("[%s] error (%s) decoding message %s",
@@ -264,21 +262,6 @@ func (c *Client) readLoop() {
 				continue
 			}
 
-			// remain := atomic.AddInt64(&c.rdyCount, -1)
-			// atomic.AddInt64(&q.totalRdyCount, -1)
-			// atomic.AddUint64(&c.messagesReceived, 1)
-			// atomic.AddUint64(&q.MessagesReceived, 1)
-			// atomic.AddInt64(&c.messagesInFlight, 1)
-			// atomic.AddInt64(&q.messagesInFlight, 1)
-			// atomic.StoreInt64(&c.lastMsgTimestamp, time.Now().UnixNano())
-
-			// if q.VerboseLogging {
-			// 	log.Debug("[%s] (remain %d) FrameTypeMessage: %s - %s",
-			// 		c, remain, msg.Id, msg.Body)
-			// }
-
-			// q.incomingMessages <- msg
-			// c.rdyChan <- c
 		case FrameTypeResponse:
 			switch {
 			case bytes.Equal(data, []byte("CLOSE_WAIT")):
@@ -290,12 +273,6 @@ func (c *Client) readLoop() {
 			case bytes.Equal(data, []byte("H")):
 				// var buf bytes.Buffer
 				log.Debug("[%s] heartbeat received", c)
-				// err := c.sendCommand(&buf, Nop())
-				// if err != nil {
-				// 	handleError(q, c, fmt.Sprintf("[%s] error sending NOP - %s",
-				// 		c, err.Error()))
-				// 	goto exit
-				// }
 			default:
 				log.Debug("FrameTypeResponse receive %s", string(data))
 			}

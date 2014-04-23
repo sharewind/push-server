@@ -4,7 +4,6 @@ import (
 	"io"
 	"net"
 
-	// "github.com/bitly/go-nsq"
 	"code.sohuno.com/kzapp/push-server/util"
 )
 
@@ -13,7 +12,7 @@ type tcpServer struct {
 }
 
 func (p *tcpServer) Handle(clientConn net.Conn) {
-	log.Debug("TCP: new client(%s)", clientConn.RemoteAddr())
+	// log.Debug("TCP: new client(%s)", clientConn.RemoteAddr())
 
 	// The client should initialize itself by sending a 4 byte sequence indicating
 	// the version of the protocol that it intends to communicate, this will allow us
@@ -21,12 +20,15 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 	buf := make([]byte, 4)
 	_, err := io.ReadFull(clientConn, buf)
 	if err != nil {
+		if clientConn != nil {
+			clientConn.Close()
+		}
 		log.Error("failed to read protocol version - %s", err.Error())
 		return
 	}
 	protocolMagic := string(buf)
 
-	log.Debug("CLIENT(%s): desired protocol magic '%s'", clientConn.RemoteAddr(), protocolMagic)
+	// log.Debug("CLIENT(%s): desired protocol magic '%s'", clientConn.RemoteAddr(), protocolMagic)
 
 	var prot util.Protocol
 	switch protocolMagic {

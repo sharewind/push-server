@@ -36,26 +36,6 @@ func NewMessage(id util.HexID, body []byte) *Message {
 	}
 }
 
-// Touch sends a TOUCH command to the nsqd which
-// sent this message
-func (m *Message) Touch() {
-	select {
-	// case m.cmdChan <- Touch(m.Id):
-	case <-m.exitChan:
-	}
-}
-
-// Requeue sends a REQUEUE command to the nsqd which
-// sent this message, using the supplied delay
-// func (m *Message) Requeue(timeoutMs int) {
-// 	finishedMessage := &FinishedMessage{
-// 		Id:             m.Id,
-// 		RequeueDelayMs: timeoutMs,
-// 		Success:        false,
-// 	}
-// 	m.responseChan <- finishedMessage
-// }
-
 // EncodeBytes serializes the message into a new, returned, []byte
 func (m *Message) EncodeBytes() ([]byte, error) {
 	var buf bytes.Buffer

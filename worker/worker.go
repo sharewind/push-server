@@ -36,16 +36,7 @@ var ErrOverMaxInFlight = errors.New("over configure max-inflight")
 // returned from ConnectToLookupd when given lookupd address exists already
 var ErrLookupdAddressExists = errors.New("lookupd address already exists")
 
-// Writer is a high-level type to publish to NSQ.
-//
-// A Writer instance is 1:1 with a destination `nsqd`
-// and will lazily connect to that instance (and re-connect)
-// when Publish commands are executed.
-
 type Worker struct {
-	// 64bit atomic vars need to be first for proper alignment on 32bit platforms
-	// clientIDSequence int64
-
 	sync.RWMutex
 	VerboseLogging bool // enable verbose logging
 	// options *nsqdOptions
@@ -80,15 +71,8 @@ type Worker struct {
 	pendingConnections map[string]bool
 	nsqConnections     map[string]*nsqConn
 
-	// incomingMessages chan *Message
-
-	lookupdRecheckChan chan int
-	lookupdHTTPAddrs   []string
-	lookupdQueryIndex  int
-
-	runningHandlers int32
-	stopFlag        int32
-	stopHandler     sync.Once
+	stopFlag    int32
+	stopHandler sync.Once
 
 	idChan          chan int64
 	messageCount    uint64
@@ -118,24 +102,7 @@ func NewWorker(options *workerOptions) *Worker {
 
 	w := &Worker{
 		httpAddr: httpAddr,
-		// transactionChan: make(chan *WriterTransaction),
 		exitChan: make(chan int),
-		// closeChan: make(chan int),
-		// dataChan:  make(chan []byte),
-
-		// MaxAttemptCount: 5,
-
-		// LookupdPollInterval: 60 * time.Second,
-		// LookupdPollJitter:   0.3,
-
-		// LowRdyIdleTimeout: 10 * time.Second,
-
-		// DefaultRequeueDelay: 90 * time.Second,
-		// MaxRequeueDelay:     15 * time.Minute,
-		// BackoffMultiplier:   time.Second,
-
-		// ShortIdentifier: strings.Split(hostname, ".")[0],
-		// LongIdentifier:  hostname,
 
 		ReadTimeout:       DefaultClientTimeout,
 		WriteTimeout:      time.Second,
@@ -149,11 +116,6 @@ func NewWorker(options *workerOptions) *Worker {
 		nsqConnections:     make(map[string]*nsqConn),
 
 		idChan: make(chan int64, 4096),
-		// lookupdRecheckChan: make(chan int, 1), // used at connection close to force a possible reconnect
-		// maxInFlight:        1,
-		// backoffChan:        make(chan bool),
-		// rdyChan:            make(chan *nsqConn, 1),
-
 	}
 
 	w.waitGroup.Wrap(func() { w.idPump() })
@@ -164,16 +126,6 @@ func NewWorker(options *workerOptions) *Worker {
 func (w *Worker) Main() {
 	context := &context{w}
 
-	// n.waitGroup.Wrap(func() { n.lookupLoop() })
-
-	// tcpListener, err := net.Listen("tcp", n.tcpAddr.String())
-	// if err != nil {
-	// 	log.Fatalf("FATAL: listen (%s) failed - %s", n.tcpAddr, err.Error())
-	// }
-	// n.tcpListener = tcpListener
-	// tcpServer := &tcpServer{context: context}
-	// n.waitGroup.Wrap(func() { util.TCPServer(n.tcpListener, tcpServer) })
-
 	httpListener, err := net.Listen("tcp", w.httpAddr.String())
 	if err != nil {
 		log.Fatalf("FATAL: listen (%s) failed - %s", w.httpAddr, err.Error())
@@ -181,10 +133,6 @@ func (w *Worker) Main() {
 	w.httpListener = httpListener
 	httpServer := &httpServer{context: context}
 	w.waitGroup.Wrap(func() { HTTPServer(w.httpListener, httpServer) })
-
-	// if n.options.StatsdAddress != "" {
-	// 	n.waitGroup.Wrap(func() { n.statsdLoop() })
-	// }
 }
 
 // PutMessage writes to the appropriate incoming message channel
@@ -336,11 +284,6 @@ func (w *Worker) SafeConnectToBroker(addr []string) {
 	}
 }
 
-// ConnectToNSQ takes a nsqd address to connect directly to.
-//
-// It is recommended to use ConnectToLookupd so that topics are discovered
-// automatically.  This method is useful when you want to connect to a single, local,
-// instance.
 func (q *Worker) ConnectToBroker(addr string) error {
 	log.Debug("connect to broker %s", addr)
 
@@ -389,7 +332,6 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	ci["deflate_level"] = q.DeflateLevel
 	ci["snappy"] = q.Snappy
 	ci["feature_negotiation"] = true
-	ci["sample_rate"] = q.SampleRate
 	ci["user_agent"] = userAgent
 	ci["role"] = "$_@push_sign_$_kz_worker"
 	cmd, err := client.Identify(ci)
@@ -467,18 +409,10 @@ func (q *Worker) ConnectToBroker(addr string) error {
 	q.nsqConnections[connection.String()] = connection
 	q.Unlock()
 
-	// pre-emptive signal to existing connections to lower their RDY count
-	// q.RLock()
-	// for _, c := range q.nsqConnections {
-	// 	c.rdyChan <- c
-	// }
-	// q.RUnlock()
-
 	log.Debug("connect to broker %s success", addr)
 	connection.wg.Add(2)
 	go q.readLoop(connection)
 	go q.messagePump(connection)
-	// go q.finishLoop(connection)
 
 	return nil
 }
@@ -487,10 +421,6 @@ func handleError(w *Worker, c *nsqConn, errMsg string) {
 	log.Debug("[%s] handleError %s", c, errMsg)
 	atomic.StoreInt32(&c.stopFlag, 1)
 
-	// q.RLock()
-	// numLookupd := len(q.lookupdHTTPAddrs)
-	// q.RUnlock()
-	// if numLookupd == 0 {
 	go func(addr string) {
 		for {
 			log.Debug("[%s] re-connecting in 15 seconds...", addr)
@@ -572,8 +502,6 @@ func (w *Worker) readLoop(c *nsqConn) {
 		switch frameType {
 		case FrameTypeMessage:
 			msg, err := broker.DecodeMessage(data)
-			// msg.cmdChan = c.cmdChan
-			// msg.responseChan = c.finishedMessages
 
 			if err != nil {
 				handleError(w, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
@@ -584,16 +512,6 @@ func (w *Worker) readLoop(c *nsqConn) {
 			log.Info("[%s] FrameTypeMessage receive  %s - %s", c, msg.Id, msg.Body)
 			// }
 
-			// remain := atomic.AddInt64(&c.rdyCount, -1)
-			// atomic.AddInt64(&q.totalRdyCount, -1)
-			// atomic.AddUint64(&c.messagesReceived, 1)
-			// atomic.AddUint64(&q.MessagesReceived, 1)
-			// atomic.AddInt64(&c.messagesInFlight, 1)
-			// atomic.AddInt64(&q.messagesInFlight, 1)
-			// atomic.StoreInt64(&c.lastMsgTimestamp, time.Now().UnixNano())
-
-			// q.incomingMessages <- msg
-			// c.rdyChan <- c
 		case FrameTypeResponse:
 			switch {
 			case bytes.Equal(data, []byte("CLOSE_WAIT")):
@@ -641,13 +559,9 @@ func (q *Worker) stopBrokerConn(c *nsqConn) {
 	c.stopper.Do(func() {
 		log.Debug("[%s] beginning stopFinishLoop!", c)
 		close(c.exitChan)
-		// log.Debug("[%s] close c exitChan done!", c)
 		c.Close()
-		// log.Debug("[%s] close c conn done!", c)
 		go q.cleanupConnection(c)
-		// log.Debug("[%s] stopper Do done!", c)
 	})
-	// log.Debug("[%s] stopBrokerConn finished!", c)
 }
 
 func (q *Worker) cleanupConnection(c *nsqConn) {

@@ -1,7 +1,6 @@
 package broker
 
 import (
-	//"code.sohuno.com/kzapp/push-server/util"
 	"bufio"
 	"compress/flate"
 	"crypto/tls"
@@ -36,13 +35,6 @@ type identifyDataV2 struct {
 }
 
 type client struct {
-	// ReadyCount     int64
-	// LastReadyCount int64
-	// InFlightCount  int64
-	// MessageCount   uint64
-	// FinishCount    uint64
-	// RequeueCount   uint64
-
 	sync.RWMutex
 
 	context   *context
@@ -69,10 +61,7 @@ type client struct {
 
 	State       int32
 	ConnectTime time.Time
-	// Channel        *Channel
-	// incomingMsgChan chan *Message // TODO need process message send error, message unsend on closing
-	ReadyStateChan chan int
-	ExitChan       chan int
+	ExitChan    chan int
 
 	ClientID   int64
 	Hostname   string
@@ -109,20 +98,14 @@ func newClient(conn net.Conn, context *context) *client {
 		OutputBufferSize:    DefaultBufferSize,
 		OutputBufferTimeout: 250 * time.Millisecond,
 
-		MsgTimeout: context.broker.options.MsgTimeout,
-
 		// ReadyStateChan has a buffer of 1 to guarantee that in the event
 		// there is a race the state update is not lost
-		ReadyStateChan: make(chan int, 1),
-		ExitChan:       make(chan int),
-		ConnectTime:    time.Now(),
+		ExitChan:    make(chan int),
+		ConnectTime: time.Now(),
 		// State:          broker.StateInit,
 
 		ClientID: -1,
 		Hostname: identifier,
-
-		// SubEventChan:      make(chan *Channel, 1),
-		// IdentifyEventChan: make(chan identifyEvent, 1),
 
 		// heartbeats are client configurable but default to 30s
 		HeartbeatInterval: context.broker.options.ClientTimeout / 2,
@@ -161,67 +144,10 @@ func (c *client) Identify(data identifyDataV2) error {
 		return err
 	}
 
-	err = c.SetSampleRate(data.SampleRate)
-	if err != nil {
-		return err
-	}
-
-	err = c.SetMsgTimeout(data.MsgTimeout)
-	if err != nil {
-		return err
-	}
-
-	// ie := identifyEvent{
-	// 	OutputBufferTimeout: c.OutputBufferTimeout,
-	// 	HeartbeatInterval:   c.HeartbeatInterval,
-	// 	SampleRate:          c.SampleRate,
-	// 	MsgTimeout:          c.MsgTimeout,
-	// }
-
-	// // update the client's message pump
-	// select {
-	// case c.IdentifyEventChan <- ie:
-	// default:
-	// }
-
 	return nil
 }
 
-func (c *client) Stats() ClientStats {
-	c.RLock()
-	// TODO: deprecated, remove in 1.0
-	name := fmt.Sprintf("%s", c.ClientID)
-
-	clientId := fmt.Sprintf("%s", c.ClientID)
-	hostname := c.Hostname
-	userAgent := c.UserAgent
-	c.RUnlock()
-	return ClientStats{
-		// TODO: deprecated, remove in 1.0
-		Name: name,
-
-		Version:       "V2",
-		RemoteAddress: c.RemoteAddr().String(),
-		ClientID:      clientId,
-		Hostname:      hostname,
-		UserAgent:     userAgent,
-		State:         atomic.LoadInt32(&c.State),
-		// ReadyCount:    atomic.LoadInt64(&c.ReadyCount),
-		// InFlightCount: atomic.LoadInt64(&c.InFlightCount),
-		// MessageCount:  atomic.LoadUint64(&c.MessageCount),
-		// FinishCount:   atomic.LoadUint64(&c.FinishCount),
-		// RequeueCount: atomic.LoadUint64(&c.RequeueCount),
-		ConnectTime: c.ConnectTime.Unix(),
-		SampleRate:  atomic.LoadInt32(&c.SampleRate),
-		TLS:         atomic.LoadInt32(&c.TLS) == 1,
-		Deflate:     atomic.LoadInt32(&c.Deflate) == 1,
-		Snappy:      atomic.LoadInt32(&c.Snappy) == 1,
-	}
-}
-
 func (c *client) StartClose() {
-	// Force the client into ready 0
-	// c.SetReadyCount(0)
 	// mark this client as closing
 	atomic.StoreInt32(&c.State, StateClosing)
 }
@@ -235,8 +161,7 @@ func (c *client) SetHeartbeatInterval(desiredInterval int) error {
 		c.HeartbeatInterval = 0
 	case desiredInterval == 0:
 		// do nothing (use default)
-	case desiredInterval > 1000:
-		// && desiredInterval <= int(c.context.broker.options.MaxHeartbeatInterval/time.Millisecond):
+	case desiredInterval >= 1000:
 		c.HeartbeatInterval = time.Duration(desiredInterval) * time.Millisecond
 	default:
 		return errors.New(fmt.Sprintf("heartbeat interval (%d) is invalid", desiredInterval))
@@ -254,7 +179,7 @@ func (c *client) SetOutputBufferSize(desiredSize int) error {
 		size = 1
 	case desiredSize == 0:
 		// do nothing (use default)
-	case desiredSize >= 64 && desiredSize <= int(c.context.broker.options.MaxOutputBufferSize):
+	case desiredSize >= 64:
 		size = desiredSize
 	default:
 		return errors.New(fmt.Sprintf("output buffer size (%d) is invalid", desiredSize))
@@ -283,36 +208,10 @@ func (c *client) SetOutputBufferTimeout(desiredTimeout int) error {
 		c.OutputBufferTimeout = 0
 	case desiredTimeout == 0:
 		// do nothing (use default)
-	case desiredTimeout >= 1 &&
-		desiredTimeout <= int(c.context.broker.options.MaxOutputBufferTimeout/time.Millisecond):
+	case desiredTimeout >= 1:
 		c.OutputBufferTimeout = time.Duration(desiredTimeout) * time.Millisecond
 	default:
 		return errors.New(fmt.Sprintf("output buffer timeout (%d) is invalid", desiredTimeout))
-	}
-
-	return nil
-}
-
-func (c *client) SetSampleRate(sampleRate int32) error {
-	if sampleRate < 0 || sampleRate > 99 {
-		return errors.New(fmt.Sprintf("sample rate (%d) is invalid", sampleRate))
-	}
-	atomic.StoreInt32(&c.SampleRate, sampleRate)
-	return nil
-}
-
-func (c *client) SetMsgTimeout(msgTimeout int) error {
-	c.Lock()
-	defer c.Unlock()
-
-	switch {
-	case msgTimeout == 0:
-		// do nothing (use default)
-	case msgTimeout >= 1000 &&
-		msgTimeout <= int(c.context.broker.options.MaxMsgTimeout/time.Millisecond):
-		c.MsgTimeout = time.Duration(msgTimeout) * time.Millisecond
-	default:
-		return errors.New(fmt.Sprintf("msg timeout (%d) is invalid", msgTimeout))
 	}
 
 	return nil

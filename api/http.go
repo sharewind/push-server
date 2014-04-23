@@ -1,15 +1,9 @@
 package api
 
 import (
-	// "bufio"
-	// "errors"
-	// "fmt"
 	"io"
-	// "net"
 	"net/http"
 	"net/url"
-	// "strconv"
-	// "strings"
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/model"
@@ -138,7 +132,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 
 	var device *model.Device = nil
 	deviceID, err := model.FindDeviceIDBySerialNO(serial_no)
-	log.Info("FindDeviceIDBySerialNO %s result %s", serial_no, deviceID)
+	log.Info("FindDeviceIDBySerialNO %s result %d", serial_no, deviceID)
 
 	if err == nil && deviceID != 0 {
 		device, err = model.FindDeviceByID(deviceID)

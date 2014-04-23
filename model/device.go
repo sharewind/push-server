@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"time"
@@ -24,11 +25,15 @@ func FindDeviceIDBySerialNO(serialNO string) (ID int64, err error) {
 		return fn
 	}
 	err = withCollection("devices", query)
-	if err == nil && result != nil {
-		return result.ID, err
+	if err != nil {
+		log.Error("FindDeviceIDBySerialNO %s", err)
+		return int64(-1), err
 	}
-	log.Error("FindDeviceIDBySerialNO %s", err)
-	return
+
+	if result == nil {
+		return int64(-1), errors.New("device not exist")
+	}
+	return result.ID, nil
 }
 
 func FindDeviceByID(ID int64) (result *Device, err error) {

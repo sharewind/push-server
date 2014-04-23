@@ -13,18 +13,11 @@ import (
 )
 
 var (
-	flagSet = flag.NewFlagSet("pushapi", flag.ExitOnError)
-
+	flagSet     = flag.NewFlagSet("pushapi", flag.ExitOnError)
 	config      = flagSet.String("config", "", "path to config file")
 	showVersion = flagSet.Bool("version", false, "print version string")
-
 	httpAddress = flagSet.String("http-address", "0.0.0.0:4171", "<addr>:<port> to listen on for HTTP clients")
 )
-
-func init() {
-	// flagSet.Var(&nsqlookupdHTTPAddresses, "lookupd-http-address", "lookupd HTTP address (may be given multiple times)")
-	// flagSet.Var(&nsqdHTTPAddresses, "nsqd-http-address", "nsqd HTTP address (may be given multiple times)")
-}
 
 func main() {
 	flagSet.Parse(os.Args[1:])
