@@ -8,8 +8,8 @@ apps/api/api
 apps/admin/admin
 apps/*/*.log
 bench/bench
-bench/bench_mongo
-bench/bench_client
+bench/bench_mongo/bench_mongo
+bench/bench_client/bench_client
 test/*
 dist
 tags

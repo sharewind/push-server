@@ -14,6 +14,7 @@ func main() {
 	runtime.GOMAXPROCS(4)
 	fmt.Println("client start!")
 
+	for i := 0; i < 1000; i++ {
 
 		go createClient()
 		fmt.Println(i)
