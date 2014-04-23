@@ -49,7 +49,7 @@ SUB[space]<channel_id>\ n
 </code>
 
 Success Response:<code>OK</code>
-Error Response:   
+Error Response:
 <code>
 E_INVALID_CLIENT  
 E_BAD_CHANNEL</code>
@@ -66,11 +66,9 @@ PUB[space]<client_id> [space]<channel_id>[space]<message_id>\n
 <message_id>  - message的ID(int64)  
 </code>
 
-Success Response:<code>ACK <message_id></code>
-Error Response:
-<code>
-  OFF <message_id>  
-  ERR <message_id> </code>
+Success Response:<code>ACK 1 <message_id> <client_id></code>
+Error Response:<code>
+ACK 0 <message_id> <client_id></code>
 
 #####CLS 
 client 关闭连接, 收到服务端成功返回后即可关闭自己的连接
@@ -144,7 +142,8 @@ const (
 </code>
 
 错误
-<code>
+
+<pre>
 	NotFound      = -1
 	OK            = 0
 	ParamErr      = 1
@@ -156,9 +155,9 @@ const (
 	ChannelIdErr  = 7
 	DeviceTypeErr = 8
 	SerialNoErr   = 9
-</code>
+</pre>
 
-示例
+示例  
 <code>
 curl -X POST /registration?serial_no=SOHUNO20140401XX&device_type=3&device_name=搜狐Android测试机
 </code>
@@ -181,8 +180,8 @@ Body: 推送消息的内容
 {"code":0,"msg":"OK","data":null}
 </code>
 
-错误
-<code>
+错误  
+<pre>
 	NotFound      = -1
 	OK            = 0
 	ParamErr      = 1
@@ -194,7 +193,7 @@ Body: 推送消息的内容
 	ChannelIdErr  = 7
 	DeviceTypeErr = 8
 	NoSubErr      = 9
-</code>
+</pre>
 
 
 ##### 4.1 管理后台
