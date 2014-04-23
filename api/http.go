@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/model"
@@ -98,10 +99,10 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	log.Info("request %s ", req.URL.RawQuery)
 
-	if req.Method != "POST" {
-		util.ApiResponse(w, 405, MethodErr, Msg[MethodErr], nil)
-		return
-	}
+	// if req.Method != "POST" {
+	// 	util.ApiResponse(w, 405, MethodErr, Msg[MethodErr], nil)
+	// 	return
+	// }
 
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {
@@ -122,6 +123,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	device_name := reqParams.Get("device_name")
+	device_type, _ := strconv.ParseInt(reqParams.Get("device_type"), 10, 64)
 
 	// result := model.CheckOrCreateChannel(channel_id)
 	// if result == false {
@@ -150,7 +152,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 			ID:              <-s.context.api.idChan,
 			SerialNO:        serial_no,
 			DeviceName:      device_name,
-			DeviceType:      int8(3), //int8(device_type),
+			DeviceType:      int8(device_type),
 			CreatedAt:       time.Now().UnixNano(),
 			OnlineTimestamp: time.Now().UnixNano(),
 		}
@@ -164,7 +166,7 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 
 	}
 	data := make(map[string]interface{})
-	data["broker"] = "b1.zhan.sohu.com"
+	data["broker"] = *s.context.api.brokerTcpAddr
 	data["device_id"] = device.ID
 	log.Info("INFO: regiest success %s", serial_no)
 	util.ApiResponse(w, 200, OK, Msg[OK], data)

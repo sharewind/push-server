@@ -12,16 +12,17 @@ import (
 var log = logging.MustGetLogger("api")
 
 type PushAPI struct {
-	httpAddr     *net.TCPAddr
-	httpListener net.Listener
-	idChan       chan int64
-	exitChan     chan int
-	waitGroup    util.WaitGroupWrapper
-	IdSeq        int64
+	httpAddr      *net.TCPAddr
+	brokerTcpAddr *string
+	httpListener  net.Listener
+	idChan        chan int64
+	exitChan      chan int
+	waitGroup     util.WaitGroupWrapper
+	IdSeq         int64
 }
 
 // NewWriter returns an instance of Writer for the specified address
-func NewPushAPI(httpAddress *string) *PushAPI {
+func NewPushAPI(httpAddress *string, brokerTcpAddress *string) *PushAPI {
 
 	if len(*httpAddress) == 0 {
 		log.Fatalf("httpAddress required.")
@@ -33,9 +34,10 @@ func NewPushAPI(httpAddress *string) *PushAPI {
 	}
 
 	p := &PushAPI{
-		httpAddr: httpAddr,
-		idChan:   make(chan int64, 4096),
-		exitChan: make(chan int),
+		httpAddr:      httpAddr,
+		brokerTcpAddr: brokerTcpAddress,
+		idChan:        make(chan int64, 4096),
+		exitChan:      make(chan int),
 	}
 	return p
 }

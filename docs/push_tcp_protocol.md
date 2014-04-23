@@ -32,6 +32,13 @@ H\n
 IDENTIFY\n  [ 4-byte size in bytes ][ N-byte JSON data ]
 </code>
 
+json data
+
+<code>
+{"client_id": client_id, "heartbeat_interval": 300}
+</code>
+其中心跳时间以秒为单位
+
 #####SUB 
 client 订阅指定的channel
 
@@ -66,7 +73,7 @@ Success Response:<code>ACK <message_id></code>
   ERR <message_id> </code>
 
 #####CLS 
-client 关闭连接
+client 关闭连接, 收到服务端成功返回后即可关闭自己的连接
 
 <code>
 CLS\n
@@ -76,6 +83,9 @@ Success Responses:
 <code>CLOSE_WAIT</code>
 Error Responses:  
 <code>E_INVALID</code>
+
+
+
 #### 数据格式
 
 定义为数据帧的结构以支持不同的内容
@@ -105,31 +115,91 @@ message 的格式
 Router负责设备的注册并分配给设备一个可连接的Broker地址。
 
 URL: /registration  
+Host: 10.10.79.134:4171
 Method: POST  
 Parmas:
 
-- device_type（3：Android，4：iOS）  
-- serial_num（手机序列号）  
-- appid（应用的ID）  
+- device_type
+- device_name(设备名称)
+- serial_no（手机序列号）  
+
+<code>
+const (
+	ALLDevice    = 0
+	Browser      = 1
+	PC           = 2
+	Android      = 3
+	IOS          = 4
+	WindowsPhone = 5
+	Other        = 6
+)
+<code>
+
 
 返回  
 
+成功
 <code>
-{broker:"b1.zhan.sohu.com",devid:1030391111929}//iOS设备不需要返回broker
+{broker:"10.10.79.134:8600", device_id:1030391111929}//iOS设备不需要返回broker
+</code>
+
+错误
+<code>
+	NotFound      = -1
+	OK            = 0
+	ParamErr      = 1
+	InternalErr   = 2
+	MethodErr     = 3
+	MsgEmpty      = 4
+	MsgTooLong    = 5
+	MsgErr        = 6
+	ChannelIdErr  = 7
+	DeviceTypeErr = 8
+	SerialNoErr   = 9
+</code>
+
+示例
+<code>
+curl -X POST /registration?serial_no=SOHUNO20140401XX&device_type=3&device_name=搜狐Android测试机
 </code>
 
 ##### 3.2 业务逻辑发消息
 业务线推送消息给client  
 URL: /put  
+Host:10.10.79.134:8710
 Method: POST   
 Parmas:
 
 - channel_id 推送频道的ID
 - device_type 目标设备类型（0：Android，1：iOS）  
-- sign 请求签名，用于验证是从可信来源发送的  
  
 Body: 推送消息的内容
 
+
+成功
+<code>
+{"code":0,"msg":"OK","data":null}
+</code>
+
+错误
+<code>
+	NotFound      = -1
+	OK            = 0
+	ParamErr      = 1
+	InternalErr   = 2
+	MethodErr     = 3
+	MsgEmpty      = 4
+	MsgTooLong    = 5
+	MsgErr        = 6
+	ChannelIdErr  = 7
+	DeviceTypeErr = 8
+	NoSubErr      = 9
+</code>
+
+
+##### 4.1 管理后台
+
+http port = 4173
 
 ####参考资料
 [NSQ TCP Protocol Spec](http://bitly.github.io/nsq/clients/tcp_protocol_spec.html)
