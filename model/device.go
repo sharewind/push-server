@@ -26,7 +26,7 @@ func FindDeviceIDBySerialNO(serialNO string) (ID int64, err error) {
 	}
 	err = withCollection("devices", query)
 	if err != nil {
-		log.Error("FindDeviceIDBySerialNO %s", err)
+		log.Debug("FindDeviceIDBySerialNO %s", err)
 		return int64(-1), err
 	}
 
@@ -44,7 +44,7 @@ func FindDeviceByID(ID int64) (result *Device, err error) {
 	}
 	err = withCollection("devices", query)
 	if err != nil {
-		log.Error("FindDeviceByID %s", err)
+		log.Error("FindDeviceByID %d %s", ID, err)
 	}
 	return result, err
 }

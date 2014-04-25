@@ -157,12 +157,15 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 			util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
 			return
 		}
-	} else {
+		log.Info("INFO: regiest success %s", serial_no)
 
+	} else {
+		log.Debug("%d have register", device.ID)
 	}
+
 	data := make(map[string]interface{})
 	data["broker"] = *s.context.api.brokerTcpAddr
 	data["device_id"] = device.ID
-	log.Info("INFO: regiest success %s", serial_no)
+
 	util.ApiResponse(w, 200, OK, Msg[OK], data)
 }

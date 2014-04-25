@@ -4,7 +4,7 @@ import (
 	"crypto/md5"
 	"hash/crc32"
 	"io"
-	"os"
+	// "os"
 	"time"
 )
 
@@ -30,10 +30,11 @@ type brokerOptions struct {
 }
 
 func NewBrokerOptions() *brokerOptions {
-	hostname, err := os.Hostname()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// hostname, err := os.Hostname()
+	hostname := "sohu"
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	o := &brokerOptions{
 		TCPAddress: "0.0.0.0:8600",
