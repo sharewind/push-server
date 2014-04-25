@@ -22,6 +22,8 @@ var (
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
+	flagSet.Parse(os.Args[1:])
+
 	fmt.Println("client start!")
 
 	clientChan := make(chan *client.Client, *clientCount)
