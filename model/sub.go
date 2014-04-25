@@ -23,10 +23,10 @@ func SaveSubscribe(sub *Subscribe) (err error) {
 	return err
 }
 
-func FindSubscribeByDeviceID(SubscribeID int64, deviceID int64) (result *Subscribe, err error) {
+func FindSubscribeByDeviceID(channelID int64, deviceID int64) (result *Subscribe, err error) {
 	result = &Subscribe{}
 	query := func(c *mgo.Collection) error {
-		fn := c.Find(bson.M{"Subscribe_id": SubscribeID, "device_id": deviceID}).One(&result)
+		fn := c.Find(bson.M{"channel_id": channelID, "device_id": deviceID}).One(&result)
 		return fn
 	}
 	err = withCollection("subs", query)

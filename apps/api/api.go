@@ -4,11 +4,11 @@ import (
 	"flag"
 	// "fmt"
 	// "github.com/op/go-logging"
-	"log"
+	// "log"
 	"os"
 	"os/signal"
 	"runtime"
-	"runtime/pprof"
+	// "runtime/pprof"
 	"syscall"
 	// "time"
 
@@ -33,14 +33,14 @@ func main() {
 
 	flagSet.Parse(os.Args[1:])
 
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
+	// if *cpuprofile != "" {
+	// 	f, err := os.Create(*cpuprofile)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	pprof.StartCPUProfile(f)
+	// 	defer pprof.StopCPUProfile()
+	// }
 
 	exitChan := make(chan int)
 	signalChan := make(chan os.Signal, 1)
