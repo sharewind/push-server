@@ -15,7 +15,7 @@ import (
 
 var (
 	flagSet        = flag.NewFlagSet("client", flag.ExitOnError)
-	apiHttpAddress = flagSet.String("api-http-address", "0.0.0.0:4171", "<addr>:<port> to listen on for HTTP clients")
+	apiHttpAddress = flagSet.String("api-http-address", "0.0.0.0:8501", "<addr>:<port> to listen on for HTTP clients")
 	subChannel     = flagSet.Int64("sub-channel", int64(11111), "client sub channel id")
 	clientCount    = flagSet.Int("client-count", 50000, "nums of client start")
 )
@@ -30,7 +30,7 @@ func main() {
 	for i := 0; i < *clientCount; i++ {
 		go createClient(clientChan)
 		log.Printf("start client  %d\n", i)
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 
 	exitChan := make(chan int)

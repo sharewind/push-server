@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"runtime/pprof"
 	"syscall"
 
 	"code.sohuno.com/kzapp/push-server/broker"
@@ -19,17 +18,13 @@ import (
 var (
 	flagSet = flag.NewFlagSet("broker", flag.ExitOnError)
 
-	// pprof options
-	cpuprofile = flag.String("cpuprofile", "broker.prof", "write cpu profile to file")
-	memprofile = flag.String("memprofile", "broker.mprof", "write memory profile to this file")
-
 	// basic options
-	config      = flagSet.String("config", "", "path to config file")
-	showVersion = flagSet.Bool("version", false, "print version string")
-	verbose     = flagSet.Bool("verbose", false, "enable verbose logging")
-	workerId    = flagSet.Int64("worker-id", 0, "unique identifier (int) for this worker (will default to a hash of hostname)")
-	// httpAddress = flagSet.String("http-address", "0.0.0.0:4151", "<addr>:<port> to listen on for HTTP clients")
+	config           = flagSet.String("config", "", "path to config file")
+	showVersion      = flagSet.Bool("version", false, "print version string")
+	verbose          = flagSet.Bool("verbose", false, "enable verbose logging")
+	workerId         = flagSet.Int64("worker-id", 0, "unique identifier (int) for this worker (will default to a hash of hostname)")
 	tcpAddress       = flagSet.String("tcp-address", "0.0.0.0:8600", "<addr>:<port> to listen on for TCP clients")
+	httpAddress      = flagSet.String("http-address", "0.0.0.0:8601", "<addr>:<port> to listen on for HTTP clients")
 	broadcastAddress = flagSet.String("broadcast-address", "", "address that will be locate client conn by worker")
 
 	maxBodySize = flagSet.Int64("max-body-size", 5*1024768, "maximum size of a single command body")
@@ -52,15 +47,6 @@ func main() {
 	if *showVersion {
 		fmt.Println(util.Version("broker"))
 		return
-	}
-
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
 	}
 
 	//

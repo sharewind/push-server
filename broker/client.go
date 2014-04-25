@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const DefaultBufferSize = 16 * 1024
+const DefaultBufferSize = 512
 
 type identifyDataV2 struct {
 	ClientID            string `json:"client_id"`

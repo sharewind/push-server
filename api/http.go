@@ -94,7 +94,7 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// curl -X POST http://localhost:4171/registration?serial_no=SOHUNO20140401XX&device_type=3&device_name=搜狐Android测试机
+// curl -X POST http://localhost:8501/registration?serial_no=SOHUNO20140401XX&device_type=3&device_name=搜狐Android测试机
 func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	log.Info("request %s ", req.URL.RawQuery)
 

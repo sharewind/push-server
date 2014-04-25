@@ -113,7 +113,7 @@ message 的格式
 Router负责设备的注册并分配给设备一个可连接的Broker地址。
 
 URL: /registration  
-Host: 10.10.79.134:4171
+Host: 10.10.79.134:8501
 Method: POST  
 Parmas:
 

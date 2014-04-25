@@ -18,10 +18,6 @@ var (
 	log     = logging.MustGetLogger("main")
 	flagSet = flag.NewFlagSet("worker", flag.ExitOnError)
 
-	// pprof options
-	cpuprofile = flag.String("cpuprofile", "worker.prof", "write cpu profile to file")
-	memprofile = flag.String("memprofile", "worker.mprof", "write memory profile to this file")
-
 	config      = flagSet.String("config", "", "path to config file")
 	showVersion = flagSet.Bool("version", false, "print version string")
 
@@ -32,15 +28,6 @@ var (
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	flagSet.Parse(os.Args[1:])
-
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
 
 	exitChan := make(chan int)
 	signalChan := make(chan os.Signal, 1)

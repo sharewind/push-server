@@ -10,10 +10,10 @@ import (
 
 type brokerOptions struct {
 	// basic options
-	ID         int64  `flag:"worker-id" cfg:"id"`
-	Verbose    bool   `flag:"verbose"`
-	TCPAddress string `flag:"tcp-address"`
-	// HTTPAddress      string `flag:"http-address"`
+	ID               int64  `flag:"worker-id" cfg:"id"`
+	Verbose          bool   `flag:"verbose"`
+	TCPAddress       string `flag:"tcp-address"`
+	HTTPAddress      string `flag:"http-address"`
 	BroadcastAddress string `flag:"broadcast-address"`
 
 	MaxBodySize   int64 `flag:"max-body-size"`
@@ -37,8 +37,8 @@ func NewBrokerOptions() *brokerOptions {
 	// }
 
 	o := &brokerOptions{
-		TCPAddress: "0.0.0.0:8600",
-		// HTTPAddress: "0.0.0.0:8601",
+		TCPAddress:  "0.0.0.0:8600",
+		HTTPAddress: "0.0.0.0:8601",
 
 		MaxBodySize:   5 * 1024768,
 		ClientTimeout: 60 * time.Second,

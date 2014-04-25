@@ -44,10 +44,10 @@ func NewBroker(options *brokerOptions) *Broker {
 		log.Fatal(err)
 	}
 
-	// httpAddr, err := net.ResolveTCPAddr("tcp", options.HTTPAddress)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	httpAddr, err := net.ResolveTCPAddr("tcp", options.HTTPAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if options.TLSCert != "" || options.TLSKey != "" {
 		cert, err := tls.LoadX509KeyPair(options.TLSCert, options.TLSKey)
@@ -62,9 +62,9 @@ func NewBroker(options *brokerOptions) *Broker {
 	}
 
 	b := &Broker{
-		options: options,
-		tcpAddr: tcpAddr,
-		// httpAddr: httpAddr,
+		options:  options,
+		tcpAddr:  tcpAddr,
+		httpAddr: httpAddr,
 		clients:  make(map[string]*client, DefaultClientMapSize), //default client map size
 		exitChan: make(chan int),
 		// notifyChan: make(chan interface{}),
@@ -82,9 +82,19 @@ func (b *Broker) Main() {
 	if err != nil {
 		log.Fatalf("FATAL: listen (%s) failed - %s", b.tcpAddr, err.Error())
 	}
+
 	b.tcpListener = tcpListener
 	tcpServer := &tcpServer{context: context}
 	b.waitGroup.Wrap(func() { util.TCPServer(b.tcpListener, tcpServer) })
+
+	httpListener, err := net.Listen("tcp", b.httpAddr.String())
+	if err != nil {
+		log.Fatalf("FATAL: listen (%s) failed - %s", b.httpAddr, err.Error())
+	}
+
+	b.httpListener = httpListener
+	httpServer := &httpServer{context: context}
+	b.waitGroup.Wrap(func() { util.HTTPServer(b.httpListener, httpServer) })
 }
 
 func (b *Broker) Exit() {
