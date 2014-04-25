@@ -14,7 +14,7 @@ func main() {
 	runtime.GOMAXPROCS(4)
 	fmt.Println("client start!")
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 50000; i++ {
 
 		go createClient()
 		fmt.Println(i)
@@ -39,7 +39,7 @@ func main() {
 var count = 0
 
 func createClient() {
-	addr := "localhost:8600"
+	addr := "10.10.79.134:8600"
 
 	client_id := int64(451294706224070657)
 	c := client.NewClient(addr, client_id)

@@ -6,6 +6,7 @@ import (
 	// "github.com/op/go-logging"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	// "time"
 
@@ -22,6 +23,8 @@ var (
 
 func main() {
 	flagSet.Parse(os.Args[1:])
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	exitChan := make(chan int)
 	signalChan := make(chan os.Signal, 1)
