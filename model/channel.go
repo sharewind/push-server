@@ -65,11 +65,11 @@ func CountChannel() (result int, err error) {
 func CheckOrCreateChannel(channel_id int64) (result bool) {
 	_, err := FindChannelByID(channel_id)
 	if err != nil {
-		log.Debug("channel check not exist")
+		log.Debug("channel check not exist: %s", err.Error())
 		channel := &Channel{channel_id, "", 0, "", 0, "", 0}
 		err := SaveChannel(channel)
 		if err != nil {
-			log.Error("channel insert error: %s", err.Error())
+			log.Error("channel %d insert error: %s", channel_id, err.Error())
 			return false
 		}
 	}

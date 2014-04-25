@@ -11,12 +11,17 @@ import (
 )
 
 func main() {
+	ip := os.Args[1]
+	if ip == "" {
+		fmt.Println("need ip")
+		return
+	}
 	runtime.GOMAXPROCS(4)
 	fmt.Println("client start!")
 
 	for i := 0; i < 50000; i++ {
 
-		go createClient()
+		go createClient(ip)
 		fmt.Println(i)
 
 		// runtime.Gosched()
@@ -38,12 +43,12 @@ func main() {
 
 var count = 0
 
-func createClient() {
-	addr := "10.10.79.134:8600"
+func createClient(ip string) {
+	addr := ip + ":8600"
 
-	client_id := int64(451294706224070657)
+	client_id := int64(time.Now().UnixNano())
 	c := client.NewClient(addr, client_id)
-	err := c.Register("10.10.79.134:4171")
+	err := c.Register(ip + ":4171")
 	if err != nil {
 		fmt.Println("error1:", err.Error())
 		count++

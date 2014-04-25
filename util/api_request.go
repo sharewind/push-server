@@ -47,6 +47,11 @@ func NewDeadlineTransport(timeout time.Duration) *http.Transport {
 func ApiRequest(endpoint string) (*simplejson.Json, error) {
 	httpclient := &http.Client{Transport: NewDeadlineTransport(200 * time.Second)}
 	req, err := http.NewRequest("GET", endpoint, nil)
+	defer func() {
+		if req != nil && req.Body != nil {
+			req.Body.Close()
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +85,11 @@ func ApiRequest(endpoint string) (*simplejson.Json, error) {
 func ApiPostRequest(endpoint string) (*simplejson.Json, error) {
 	httpclient := &http.Client{Transport: NewDeadlineTransport(200 * time.Second)}
 	req, err := http.NewRequest("POST", endpoint, nil)
+	defer func() {
+		if req != nil && req.Body != nil {
+			req.Body.Close()
+		}
+	}()
 	if err != nil {
 		log.Error(err.Error())
 		return nil, err

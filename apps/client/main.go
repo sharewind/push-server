@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"code.sohuno.com/kzapp/push-server/client"
 )
@@ -20,7 +21,7 @@ func main() {
 	flagSet.Parse(os.Args[1:])
 	fmt.Println("client start!")
 
-	client_id := int64(451294706224070111)
+	client_id := int64(time.Now().UnixNano())
 	c := client.NewClient(*brokerTcpAddress, client_id)
 	c.Register(*apiHttpAddress)
 	c.Connect()
