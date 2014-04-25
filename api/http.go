@@ -104,12 +104,8 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	// 	return
 	// }
 
-	reqParams, err := url.ParseQuery(req.URL.RawQuery)
-	if err != nil {
-		log.Error("failed to parse request params - %s", err.Error())
-		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
-		return
-	}
+	req.ParseForm()
+	reqParams := req.Form
 
 	// channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
 	// if err != nil || channel_id == 0 {
