@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"github.com/op/go-logging"
 	"net"
-	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,14 +23,14 @@ var log = logging.MustGetLogger("client")
 // and will lazily connect to that instance (and re-connect)
 // when Publish commands are executed.
 type Client struct {
-	ID int64
+	ID         int64
+	brokerAddr string
+	SubChannel int64
+
 	net.Conn
 
 	WriteTimeout      time.Duration
-	Addr              string
 	HeartbeatInterval time.Duration
-	ShortIdentifier   string
-	LongIdentifier    string
 
 	// concurrentWriters int32
 
@@ -44,6 +42,7 @@ type Client struct {
 	exitChan  chan int
 	closeChan chan int
 	wg        sync.WaitGroup
+	stopper   sync.Once
 }
 
 // returned when a publish command is made against a Writer that is not connected
@@ -53,30 +52,25 @@ var ErrNotConnected = errors.New("not connected")
 var ErrStopped = errors.New("stopped")
 
 // NewWriter returns an instance of Writer for the specified address
-func NewClient(addr string, id int64) *Client {
-	hostname, err := os.Hostname()
-	if err != nil {
-		log.Fatalf("ERROR: unable to get hostname %s", err.Error())
-	}
+func NewClient() *Client {
 	return &Client{
-		ID: id,
 		// transactionChan: make(chan *WriterTransaction),
 		exitChan:  make(chan int),
 		closeChan: make(chan int),
 		dataChan:  make(chan []byte),
 
 		// can be overriden before connecting
-		Addr:              addr,
 		WriteTimeout:      5 * time.Second,
 		HeartbeatInterval: DefaultClientTimeout / 2,
-		ShortIdentifier:   strings.Split(hostname, ".")[0],
-		LongIdentifier:    hostname,
 	}
 }
 
 // String returns the address of the Writer
 func (c *Client) String() string {
-	return c.Addr
+	if c.Conn != nil {
+		return fmt.Sprintf("%d_[%s]", c.ID, c.LocalAddr().String())
+	}
+	return fmt.Sprintf("%d", c.ID)
 }
 
 // Stop disconnects and permanently stops the Writer
@@ -86,6 +80,73 @@ func (c *Client) Stop() {
 	}
 	c.Close()
 	c.wg.Wait()
+}
+
+func (c *Client) AutoPump(addr string, subChannelID int64) {
+	c.SubChannel = subChannelID
+
+	go func() {
+		for {
+			if atomic.LoadInt32(&c.stopFlag) == 1 {
+				break
+			}
+
+			err := c.Register(addr)
+			if err == nil {
+				log.Info("<%s> regiester to %s success ", c, addr)
+				break
+			}
+			if err != nil {
+				log.Debug("<%s> ERROR: failed to connect to %s - %s", c, addr, err.Error())
+			}
+			log.Debug("[%s] re-connecting in 15 seconds...", addr)
+			time.Sleep(15 * time.Second)
+		}
+		//
+		c.ConnectWithRetry()
+	}()
+}
+
+func (c *Client) Register(addr string) error {
+	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%d&device_type=3&device_name=搜狐Android测试机%d", addr, time.Now().UnixNano(), time.Now().Unix())
+	log.Debug("LOOKUPD: querying %s", endpoint)
+
+	data, err := ApiPostRequest(endpoint)
+	if err != nil {
+		log.Error("Register %s - %s - %s", addr, err.Error(), data)
+		return err
+	}
+
+	device_id := int64(data.Get("device_id").MustInt())
+	broker_addr := string(data.Get("broker").MustString())
+	c.ID = device_id
+	c.brokerAddr = broker_addr
+	return nil
+}
+
+func (c *Client) ConnectWithRetry() {
+	go func() {
+		for {
+			if atomic.LoadInt32(&c.stopFlag) == 1 {
+				break
+			}
+
+			err := c.Connect()
+			if err == nil {
+				log.Info("connect to %s success ", c.brokerAddr)
+				break
+			}
+
+			if err != nil {
+				log.Debug("<%s> ERROR: failed to connect to %s - %s", c, c.brokerAddr, err.Error())
+			}
+
+			log.Debug("<%s>  re-connecting [%s] in 15 seconds...", c, c.brokerAddr)
+			time.Sleep(15 * time.Second)
+		}
+
+		c.Subscribe(c.SubChannel)
+	}()
 }
 
 func (c *Client) Connect() error {
@@ -98,9 +159,9 @@ func (c *Client) Connect() error {
 	}
 
 	log.Debug("[%s] connecting...", c)
-	conn, err := net.DialTimeout("tcp", c.Addr, time.Second*5)
+	conn, err := net.DialTimeout("tcp", c.brokerAddr, time.Second*5)
 	if err != nil {
-		log.Error("[%s] failed to dial %s - %s", c, c.Addr, err)
+		log.Error("[%s] failed to dial %s - %s", c, c.brokerAddr, err)
 		atomic.StoreInt32(&c.state, StateInit)
 		return err
 	}
@@ -157,25 +218,13 @@ func (c *Client) Connect() error {
 		return errors.New(string(data))
 	}
 
+	c.stopper = sync.Once{}
+	c.exitChan = make(chan int)
+
 	c.wg.Add(2)
 	go c.messagePump()
 	go c.readLoop()
 
-	return nil
-}
-
-func (c *Client) Register(addr string) error {
-	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%d&device_type=3&device_name=搜狐Android测试机%d", addr, time.Now().UnixNano(), time.Now().Unix())
-	log.Debug("LOOKUPD: querying %s", endpoint)
-
-	data, err := ApiPostRequest(endpoint)
-	if err != nil {
-		log.Error("Register %s - %s - %s", addr, err.Error(), data)
-		return err
-	}
-
-	device_id := int64(data.Get("device_id").MustInt())
-	c.ID = device_id
 	return nil
 }
 
@@ -196,13 +245,14 @@ func (c *Client) Close() {
 	if !atomic.CompareAndSwapInt32(&c.state, StateConnected, StateDisconnected) {
 		return
 	}
-	close(c.closeChan)
+	// close(c.closeChan)
 	c.Conn.Close()
 	go func() {
 		// we need to handle this in a goroutine so we don't
 		// block the caller from making progress
 		c.wg.Wait()
 		atomic.StoreInt32(&c.state, StateInit)
+		// log.Debug("set client to StateInit ")
 	}()
 }
 
@@ -220,6 +270,7 @@ func (c *Client) messagePump() {
 			err = cmd.Write(c)
 			if err != nil {
 				log.Error("[%s] failed to write HeartBeat - %s", c, err)
+				c.stopBrokerConn()
 				goto exit
 			}
 			// shoud receive response
@@ -230,17 +281,20 @@ func (c *Client) messagePump() {
 	}
 
 exit:
-	log.Debug("client: [%s] exiting messagePump", c)
 	heartbeatTicker.Stop()
 	if err != nil {
 		log.Debug("client: [%s] messagePump error - %s", c, err.Error())
 	}
+	c.wg.Done()
+	log.Debug("client: [%s] exiting messagePump", c)
 }
 
 func (c *Client) readLoop() {
 	rbuf := bufio.NewReader(c.Conn)
 	for {
 		if atomic.LoadInt32(&c.stopFlag) == 1 {
+			log.Info("[%s] stopBrokerConn on client stopFlag ", c.LocalAddr().String())
+			c.stopBrokerConn()
 			goto exit
 		}
 
@@ -248,7 +302,7 @@ func (c *Client) readLoop() {
 		frameType, data, err := UnpackResponse(resp)
 
 		if err != nil {
-			//handleError(q, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
+			handleError(c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
 			continue
 		}
 
@@ -257,8 +311,7 @@ func (c *Client) readLoop() {
 			msg, err := broker.DecodeMessage(data)
 			log.Info("[%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
 			if err != nil {
-				// handleError(q, c, fmt.Sprintf("[%s] error (%s) decoding message %s",
-				// 	c, err.Error(), data))
+				handleError(c, fmt.Sprintf("[%s] error (%s) decoding message %s", c, err.Error(), data))
 				continue
 			}
 
@@ -286,4 +339,27 @@ func (c *Client) readLoop() {
 exit:
 	c.wg.Done()
 	log.Debug("[%s] readLoop exiting", c)
+}
+
+func handleError(c *Client, errMsg string) {
+	log.Debug("[%s] handleError %s", c, errMsg)
+	atomic.StoreInt32(&c.stopFlag, 1)
+
+	go func() {
+		log.Debug("[%s] re-connecting in 15 seconds...", c.brokerAddr)
+		time.Sleep(15 * time.Second)
+
+		atomic.StoreInt32(&c.stopFlag, 0)
+		c.ConnectWithRetry()
+	}()
+	// }
+}
+
+func (c *Client) stopBrokerConn() {
+	c.stopper.Do(func() {
+		log.Debug("c.stopper done................")
+		close(c.exitChan)
+		c.Close()
+		log.Debug("[%s] stopBrokerConn!", c)
+	})
 }

@@ -11,22 +11,17 @@ import (
 )
 
 var (
-	flagSet          = flag.NewFlagSet("client", flag.ExitOnError)
-	apiHttpAddress   = flagSet.String("api-http-address", "0.0.0.0:4171", "<addr>:<port> to listen on for HTTP clients")
-	brokerTcpAddress = flagSet.String("broker-tcp-address", "0.0.0.0:8600", "<addr>:<port> to connect broker")
+	flagSet        = flag.NewFlagSet("client", flag.ExitOnError)
+	apiHttpAddress = flagSet.String("api-http-address", "0.0.0.0:4171", "<addr>:<port> to listen on for HTTP clients")
+	subChannel     = flagSet.Int64("sub-channel", int64(11111), "client sub channel id")
 )
 
 func main() {
 	flagSet.Parse(os.Args[1:])
 	fmt.Println("client start!")
 
-	client_id := int64(451294706224070111)
-	c := client.NewClient(*brokerTcpAddress, client_id)
-	c.Register(*apiHttpAddress)
-	c.Connect()
-
-	channel_id := int64(11111)
-	c.Subscribe(channel_id)
+	c := client.NewClient()
+	c.AutoPump(*apiHttpAddress, *subChannel)
 
 	exitChan := make(chan int)
 	signalChan := make(chan os.Signal, 1)

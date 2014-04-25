@@ -314,10 +314,10 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
 	}
 
-	ok := model.CheckOrCreateChannel(channel_id)
-	if ok == false {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "create channel error")
-	}
+	// ok := model.CheckOrCreateChannel(channel_id)
+	// if ok == false {
+	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "create channel error")
+	// }
 	device, err := model.FindDeviceByID(client_id)
 	if err != nil || device == nil {
 		log.Error("invalid client id [%d] err: %s", client_id, err)
@@ -336,6 +336,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	if err != nil {
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
+	log.Info("clientId %d save sub channel %d ", client.ClientID, channel_id)
 
 	p.context.broker.AddClient(client.ClientID, channel_id, client)
 	log.Info("clientId %d sub channel %d success ", client.ClientID, channel_id)
