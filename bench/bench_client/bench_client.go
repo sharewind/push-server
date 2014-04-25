@@ -21,7 +21,7 @@ var (
 )
 
 func main() {
-	runtime.GOMAXPROCS(16)
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	fmt.Println("client start!")
 
 	clientChan := make(chan *client.Client, *clientCount)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"code.sohuno.com/kzapp/push-server/client"
@@ -17,6 +18,7 @@ var (
 )
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	flagSet.Parse(os.Args[1:])
 	fmt.Println("client start!")
 
