@@ -35,7 +35,7 @@ func FindSubscribeByDeviceID(SubscribeID int64, deviceID int64) (result *Subscri
 
 func SaveOrUpdateSubscribe(sub *Subscribe) (err error) {
 	exist, err := FindSubscribeByDeviceID(sub.ChannelID, sub.DeviceID)
-	log.Debug(" exist sub %#v , err %s", exist, err)
+	// log.Debug(" exist sub %#v , err %s", exist, err)
 	if err == nil && exist != nil {
 		update := func(c *mgo.Collection) error {
 			q := bson.M{"Subscribe_id": sub.ChannelID, "device_id": sub.DeviceID}

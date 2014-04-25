@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/BurntSushi/toml"
@@ -24,6 +25,7 @@ var (
 )
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	flagSet.Parse(os.Args[1:])
 
 	exitChan := make(chan int)

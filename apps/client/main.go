@@ -5,29 +5,25 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
-	"time"
 
 	"code.sohuno.com/kzapp/push-server/client"
 )
 
 var (
-	flagSet          = flag.NewFlagSet("client", flag.ExitOnError)
-	apiHttpAddress   = flagSet.String("api-http-address", "0.0.0.0:4171", "<addr>:<port> to listen on for HTTP clients")
-	brokerTcpAddress = flagSet.String("broker-tcp-address", "0.0.0.0:8600", "<addr>:<port> to connect broker")
+	flagSet        = flag.NewFlagSet("client", flag.ExitOnError)
+	apiHttpAddress = flagSet.String("api-http-address", "0.0.0.0:4171", "<addr>:<port> to listen on for HTTP clients")
+	subChannel     = flagSet.Int64("sub-channel", int64(11111), "client sub channel id")
 )
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	flagSet.Parse(os.Args[1:])
 	fmt.Println("client start!")
 
-	client_id := int64(time.Now().UnixNano())
-	c := client.NewClient(*brokerTcpAddress, client_id)
-	c.Register(*apiHttpAddress)
-	c.Connect()
-
-	channel_id := int64(11111)
-	c.Subscribe(channel_id)
+	c := client.NewClient()
+	c.AutoPump(*apiHttpAddress, *subChannel)
 
 	exitChan := make(chan int)
 	signalChan := make(chan os.Signal, 1)

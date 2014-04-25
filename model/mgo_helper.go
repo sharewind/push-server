@@ -21,7 +21,7 @@ func init() {
 	mux.Lock()
 	defer mux.Unlock()
 
-	pool = util.NewSemaphore(300)
+	pool = util.NewSemaphore(100)
 	getSession()
 }
 

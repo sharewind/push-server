@@ -557,7 +557,7 @@ exit:
 
 func (q *Worker) stopBrokerConn(c *nsqConn) {
 	c.stopper.Do(func() {
-		log.Debug("[%s] beginning stopFinishLoop!", c)
+		log.Debug("[%s] beginning stopBrokerConn!", c)
 		close(c.exitChan)
 		c.Close()
 		go q.cleanupConnection(c)

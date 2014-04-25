@@ -24,7 +24,8 @@ var device = &Device{
 }
 
 func main() {
-	runtime.GOMAXPROCS(100)
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
+
 	count := int64(1000000)
 
 	countChan := make(chan int64, count)

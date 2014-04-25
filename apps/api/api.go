@@ -22,9 +22,9 @@ var (
 )
 
 func main() {
-	flagSet.Parse(os.Args[1:])
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	flagSet.Parse(os.Args[1:])
 
 	exitChan := make(chan int)
 	signalChan := make(chan os.Signal, 1)
