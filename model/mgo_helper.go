@@ -22,7 +22,8 @@ func init() {
 	defer mux.Unlock()
 
 	pool = util.NewSemaphore(10)
-	getSession()
+
+	initIndex()
 }
 
 func getSession() *mgo.Session {
@@ -36,6 +37,47 @@ func getSession() *mgo.Session {
 		}
 	}
 	return mgoSession.Clone()
+}
+
+func initIndex() {
+
+	serial_no_index := mgo.Index{
+		Key:        []string{"serial_no"},
+		Unique:     true,
+		DropDups:   true,
+		Background: true,
+		Sparse:     true,
+	}
+	err := createIndex("devices", &serial_no_index)
+	if err != nil {
+		log.Error("ERROR: create index serial_no_index error %s", err)
+	}
+
+	sub_index := mgo.Index{
+		Key:        []string{"channel_id", "device_id"},
+		Unique:     true,
+		DropDups:   true,
+		Background: true,
+		Sparse:     true,
+	}
+	err = createIndex("subs", &sub_index)
+	if err != nil {
+		log.Error("ERROR: create index serial_no_index error %s", err)
+	}
+
+}
+
+func createIndex(collection string, index *mgo.Index) error {
+	update := func(c *mgo.Collection) error {
+		fn := c.EnsureIndex(*index)
+		return fn
+	}
+
+	err := withCollection(collection, update)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func withCollection(collection string, s func(*mgo.Collection) error) error {
