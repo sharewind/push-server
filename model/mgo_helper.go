@@ -21,7 +21,7 @@ func init() {
 	mux.Lock()
 	defer mux.Unlock()
 
-	pool = util.NewSemaphore(100)
+	pool = util.NewSemaphore(10)
 	getSession()
 }
 
@@ -29,8 +29,8 @@ func getSession() *mgo.Session {
 	if mgoSession == nil {
 		var err error
 		mgoSession, err = mgo.DialWithTimeout(databaseServer, 60*time.Second)
-		mgoSession.SetMode(mgo.Monotonic, true)
-		mgoSession.SetMode(mgo.Strong, true)
+		mgoSession.SetMode(mgo.Monotonic, false)
+		mgoSession.SetMode(mgo.Strong, false)
 		if err != nil {
 			panic(err) // no, not really
 		}
