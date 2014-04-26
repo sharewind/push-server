@@ -95,14 +95,20 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 }
 
 func (p *protocol) cleanupClientConn(client *client) {
+
+	client.Lock()
+	defer client.Unlock()
+
 	client.Close()
 	model.DelClientConn(client.ClientID)
 	p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
 
 	// touch devie online
 	model.TouchDeviceOffline(client.ClientID)
-
-	close(client.ExitChan)
+	if client.ExitChan != nil {
+		close(client.ExitChan)
+		client.ExitChan = nil
+	}
 }
 
 func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
@@ -334,6 +340,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	err = model.SaveOrUpdateSubscribe(sub)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
 	log.Info("clientId %d save sub channel %d ", client.ClientID, channel_id)
@@ -348,6 +355,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	log.Info("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
 	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
 
