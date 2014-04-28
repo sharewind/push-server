@@ -108,16 +108,16 @@ func GetOfflineMessages(clientID int64) (messageIDs []int64, err error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info("GetOfflineMessages key %s reply %#v", key, values)
+	// log.Info("GetOfflineMessages key %s reply %#v", key, values)
 
 	for len(values) > 0 {
 		var id int64
 		// rating := -1 // initialize to illegal value to detect nil.
 		values, err = redis.Scan(values, &id)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
-		log.Debug("%#v", id)
+		// log.Debug("%#v", id)
 		messageIDs = append(messageIDs, id)
 	}
 	return messageIDs, nil

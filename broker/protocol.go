@@ -89,32 +89,31 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		}
 	}
 
-	log.Debug("PROTOCOL(V2): [%s] exiting ioloop", client)
+	log.Debug("PROTOCOL: [%s] exiting ioloop", client)
 	p.cleanupClientConn(client)
 	return err
 }
 
 func (p *protocol) cleanupClientConn(client *client) {
 
-	client.Lock()
-	defer client.Unlock()
+	client.stopper.Do(func() {
+		atomic.StoreInt32(&client.stopFlag, 1)
 
-	client.Close()
-	model.DelClientConn(client.ClientID)
-	if client.SubChannel != 0 && client.SubChannel != -1 {
-		p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
-	}
-	// touch devie online
-	model.TouchDeviceOffline(client.ClientID)
-	if client.ExitChan != nil {
+		client.Close()
+		model.DelClientConn(client.ClientID)
+
+		if client.SubChannel != 0 && client.SubChannel != -1 {
+			p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
+		}
+		// touch devie online
+		model.TouchDeviceOffline(client.ClientID)
 		close(client.ExitChan)
-		client.ExitChan = nil
-	}
+	})
 }
 
 func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
 	// if p.context.broker.options.Verbose {
-	// log.Debug("PROTOCOL(V2): writing msg(%s) to client(%s) - %s",
+	// log.Debug("PROTOCOL: writing msg(%s) to client(%s) - %s",
 	// msg.Id, client, msg.Body)
 	// }
 
@@ -129,7 +128,7 @@ func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) 
 		return err
 	}
 
-	log.Debug("PROTOCOL(V2): Success writing msg(%s) to client(%s) - %s", msg.Id, client, msg.Body)
+	log.Debug("PROTOCOL: Success writing msg(%s) to client(%s) - %s", msg.Id, client, msg.Body)
 	return nil
 }
 
@@ -201,7 +200,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if p.context.broker.options.Verbose {
-		log.Debug("PROTOCOL(V2): [%s] %+v", client, identifyData)
+		log.Debug("PROTOCOL: [%s] %+v", client, identifyData)
 	}
 
 	err = client.Identify(identifyData)
@@ -256,7 +255,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if tlsv1 {
-		log.Debug("PROTOCOL(V2): [%s] upgrading connection to TLS", client)
+		log.Debug("PROTOCOL: [%s] upgrading connection to TLS", client)
 		err = client.UpgradeTLS()
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -269,7 +268,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if snappy {
-		log.Debug("PROTOCOL(V2): [%s] upgrading connection to snappy", client)
+		log.Debug("PROTOCOL: [%s] upgrading connection to snappy", client)
 		err = client.UpgradeSnappy()
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -282,7 +281,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	if deflate {
-		log.Debug("PROTOCOL(V2): [%s] upgrading connection to deflate", client)
+		log.Debug("PROTOCOL: [%s] upgrading connection to deflate", client)
 		err = client.UpgradeDeflate(deflateLevel)
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -369,6 +368,11 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 
 	atomic.StoreInt32(&client.State, StateSubscribed)
 	client.SubChannel = channel_id
+
+	messagePumpStartedChan := make(chan bool)
+	go p.messagePump(client, messagePumpStartedChan)
+	<-messagePumpStartedChan
+
 	go p.checkOfflineMessage(client)
 	// client.Channel = channel
 	// update message pump
@@ -377,8 +381,79 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	return okBytes, nil
 }
 
-func (p *protocol) checkOfflineMessage(client *client) {
+func (p *protocol) messagePump(client *client, startedChan chan bool) {
+	var err error
 	var buf bytes.Buffer
+	// NOTE: `flusherChan` is used to bound message latency for
+	// the pathological case of a channel on a low volume topic
+	// with >1 clients having >1 RDY counts
+	var flusherChan <-chan time.Time
+	outputBufferTicker := time.NewTicker(client.OutputBufferTimeout)
+
+	// v2 opportunistically buffers data to clients to reduce write system calls
+	// we force flush in two cases:
+	//    1. when the client is not ready to receive messages
+	//    2. we're buffered and the channel has nothing left to send us
+	//       (ie. we would block in this loop anyway)
+	//
+	flushed := true
+
+	// signal to the goroutine that started the messagePump
+	// that we've started up
+	close(startedChan)
+
+	for {
+		if atomic.LoadInt32(&client.stopFlag) == 1 {
+			// the client is not ready to receive messages...
+			flusherChan = nil
+			goto exit
+		} else if flushed {
+			// last iteration we flushed...
+			// do not select on the flusher ticker channel
+			flusherChan = nil
+		} else {
+			// we're buffered (if there isn't any more data we should flush)...
+			// select on the flusher ticker channel, too
+			flusherChan = outputBufferTicker.C
+		}
+
+		select {
+		case <-flusherChan:
+			// if this case wins, we're either starved
+			// or we won the race between other channels...
+			// in either case, force flush
+			client.Lock()
+			err = client.Flush()
+			client.Unlock()
+			if err != nil {
+				goto exit
+			}
+			flushed = true
+		case msg, ok := <-client.clientMsgChan:
+			if !ok {
+				goto exit
+			}
+
+			// client.SendingMessage()
+			err = p.SendMessage(client, msg, &buf)
+			if err != nil {
+				goto exit
+			}
+			flushed = false
+		case <-client.ExitChan:
+			goto exit
+		}
+	}
+
+exit:
+	log.Debug("PROTOCOL: [%s] exiting messagePump", client)
+	outputBufferTicker.Stop()
+	if err != nil {
+		log.Error("PROTOCOL: [%s] messagePump error - %s", client, err.Error())
+	}
+}
+
+func (p *protocol) checkOfflineMessage(client *client) {
 
 	messageIDs, err := model.GetOfflineMessages(client.ClientID)
 	if err != nil {
@@ -391,8 +466,8 @@ func (p *protocol) checkOfflineMessage(client *client) {
 
 	subChannel := client.SubChannel
 	for _, messageID := range messageIDs {
-		msg, err := model.FindMessageByID(messageID)
-		if err != nil || msg == nil {
+		message, err := model.FindMessageByID(messageID)
+		if err != nil || message == nil {
 			log.Error("client %s message ID %d message doesn't exist, err %s", client.ClientID, messageID, err)
 			continue
 		}
@@ -404,28 +479,17 @@ func (p *protocol) checkOfflineMessage(client *client) {
 		// 	continue
 		// }
 
-		if subChannel != msg.ChannelID {
+		if subChannel != message.ChannelID {
 			continue
 		}
 
-		msg2 := &Message{
-			Id:        util.Guid(msg.ID).Hex(),
-			Body:      []byte(msg.Body),
-			Timestamp: msg.CreatedAt,
+		msg := &Message{
+			Id:        util.Guid(message.ID).Hex(),
+			Body:      []byte(message.Body),
+			Timestamp: message.CreatedAt,
 		}
-		log.Debug("msg is %#v", msg2)
-		err = p.SendMessage(client, msg2, &buf)
-		if err != nil {
-			log.Error("send message to client %s error  %s", client, err)
-		}
-
-		client.Lock()
-		err = client.Flush()
-		client.Unlock()
-
-		log.Debug("send message %#v to client %s success ", msg, client)
+		client.clientMsgChan <- msg
 		model.RemoveOfflineMessage(client.ClientID, messageID)
-
 	}
 }
 
@@ -450,7 +514,6 @@ func (p *protocol) NOP(client *client, params [][]byte) ([]byte, error) {
 
 func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	// var err error
-	var buf bytes.Buffer
 	if client.Role != "$_@push_sign_$_kz_worker" {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID_REQUEST", "client can't pub message")
 	}
@@ -480,36 +543,22 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	channel_id, _ := strconv.ParseInt(string(params[2]), 10, 64)
 	message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
 
-	dstClient, err := p.context.broker.GetClient(client_id, channel_id)
-	if err != nil || dstClient == nil {
-		p.ackPublish(client, util.ACK_OFF, client_id, message_id)
+	destClient, err := p.context.broker.GetClient(client_id, channel_id)
+	if err != nil || destClient == nil {
+		err = p.ackPublish(client, util.ACK_OFF, client_id, message_id)
 		log.Debug("client %s is null", client_id)
-		return nil, nil
+		return nil, err
 	}
-	log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, dstClient)
+	// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
 
 	msg := &Message{
 		Id:        util.Guid(message_id).Hex(),
 		Body:      body,
 		Timestamp: time.Now().UnixNano(),
 	}
-	// log.Debug("msg is %#v", msg)
-	// dstClient.SendingMessage()
-	err = p.SendMessage(dstClient, msg, &buf)
-	if err != nil {
-		log.Error("send message to client %s error  %s", dstClient, err)
-	}
-
-	dstClient.Lock()
-	err = dstClient.Flush()
-	dstClient.Unlock()
-
-	if err != nil {
-		p.ackPublish(client, util.ACT_ERR, client_id, message_id)
-	} else {
-		p.ackPublish(client, util.ACK_SUCCESS, client_id, message_id)
-	}
-	return nil, nil
+	destClient.clientMsgChan <- msg
+	err = p.ackPublish(client, util.ACT_ERR, client_id, message_id)
+	return nil, err
 }
 
 func (p *protocol) ackPublish(client *client, ackType int32, clientID int64, msgID int64) (err error) {
@@ -517,7 +566,6 @@ func (p *protocol) ackPublish(client *client, ackType int32, clientID int64, msg
 	err = p.Send(client, util.FrameTypeAck, response)
 	if err != nil {
 		log.Error("send response to client error %s ", err)
-		p.cleanupClientConn(client)
 	}
 	return err
 }

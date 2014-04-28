@@ -61,11 +61,16 @@ type client struct {
 
 	State       int32
 	ConnectTime time.Time
-	ExitChan    chan int
 
-	ClientID   int64
-	Hostname   string
-	SubChannel int64
+	ExitChan chan int
+	stopFlag int32
+	stopper  sync.Once
+
+	ClientID int64
+	Hostname string
+
+	SubChannel    int64
+	clientMsgChan chan *Message
 
 	SampleRate int32
 
@@ -88,9 +93,9 @@ func newClient(conn net.Conn, context *context) *client {
 	}
 
 	c := &client{
-		context: context,
-
-		Conn: conn,
+		context:       context,
+		clientMsgChan: make(chan *Message, 1),
+		Conn:          conn,
 
 		Reader: bufio.NewReaderSize(conn, DefaultBufferSize),
 		Writer: bufio.NewWriterSize(conn, DefaultBufferSize),

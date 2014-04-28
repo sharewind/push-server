@@ -1,10 +1,13 @@
 package model
 
 import (
-	"code.sohuno.com/kzapp/push-server/util"
+	"errors"
+	"fmt"
 	"labix.org/v2/mgo"
 	"sync"
 	"time"
+
+	"code.sohuno.com/kzapp/push-server/util"
 )
 
 var (
@@ -80,12 +83,20 @@ func createIndex(collection string, index *mgo.Index) error {
 	return nil
 }
 
-func withCollection(collection string, s func(*mgo.Collection) error) error {
+func withCollection(collection string, s func(*mgo.Collection) error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("PANIC: Recovered in mgo_helper.withCollection %s", r)
+			err = errors.New("panic on mongodb withCollection: " + fmt.Sprintf("%s", r))
+		}
+	}()
+
 	pool.Acquire()
 	defer pool.Release()
 
 	session := getSession()
 	defer session.Close()
 	c := session.DB(databaseName).C(collection)
-	return s(c)
+	err = s(c)
+	return err
 }
