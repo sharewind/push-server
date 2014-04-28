@@ -95,6 +95,10 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 }
 
 func (p *protocol) cleanupClientConn(client *client) {
+
+	client.Lock()
+	defer client.Unlock()
+
 	client.Close()
 	model.DelClientConn(client.ClientID)
 	if client.SubChannel != 0 && client.SubChannel != -1 {
@@ -102,7 +106,10 @@ func (p *protocol) cleanupClientConn(client *client) {
 	}
 	// touch devie online
 	model.TouchDeviceOffline(client.ClientID)
-	close(client.ExitChan)
+	if client.ExitChan != nil {
+		close(client.ExitChan)
+		client.ExitChan = nil
+	}
 }
 
 func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
@@ -349,6 +356,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	log.Info("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
 	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
 

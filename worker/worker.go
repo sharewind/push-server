@@ -176,22 +176,35 @@ func (w *Worker) pushMessage(message *model.Message) {
 	log.Debug("[worker]<pushMessage> %#v", message)
 	// save message on mongodb
 	// devices_ids := querySubscibeDevices(channel_id)
-	skip := 0
-	limit := -1
-	subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
+	// skip := 0
+	limit := 1000
+	sum, err := model.CountSubscribeByChannelId(message.ChannelID, message.DeviceType)
 	if err != nil {
-		log.Debug("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
-		return
+		log.Error(err.Error())
+	}
+	time := (((sum - 1) / 1000) + 1)
+	log.Debug("worker all sum:%d time:%d", sum, time)
+	for i := 0; i < time; i++ {
+		log.Debug("start worker go time:%d", i)
+		go func(skip int, limit int) {
+			subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
+			if err != nil {
+				log.Debug("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
+				return
+			}
+
+			for _, sub := range subs {
+				err := w.sendMessage2Client(&sub, message)
+				if err != nil {
+					//TODO: increase failure count
+					log.Debug("saveOfflineMessage clientID %d messageID %d", sub.DeviceID, message.ID)
+					model.SaveOfflineMessage(sub.DeviceID, message.ID)
+				}
+			}
+			log.Debug("end worker go time:%d", i)
+		}(i*limit, limit)
 	}
 
-	for _, sub := range subs {
-		err := w.sendMessage2Client(&sub, message)
-		if err != nil {
-			//TODO: increase failure count
-			log.Debug("saveOfflineMessage clientID %d messageID %d", sub.DeviceID, message.ID)
-			model.SaveOfflineMessage(sub.DeviceID, message.ID)
-		}
-	}
 }
 
 func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message) (err error) {
