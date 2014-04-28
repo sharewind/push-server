@@ -57,7 +57,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		params := bytes.Split(line, separatorBytes)
 
 		if p.context.broker.options.Verbose {
-			log.Debug("PROTOCOL(V2): [%s] %s", client, params)
+			log.Debug("PROTOCOL(V1): [%s] %s", client, params)
 		}
 
 		response, err := p.Exec(client, params)
@@ -97,11 +97,11 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 func (p *protocol) cleanupClientConn(client *client) {
 	client.Close()
 	model.DelClientConn(client.ClientID)
-	p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
-
+	if client.SubChannel != 0 && client.SubChannel != -1 {
+		p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
+	}
 	// touch devie online
 	model.TouchDeviceOffline(client.ClientID)
-
 	close(client.ExitChan)
 }
 
@@ -334,6 +334,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	err = model.SaveOrUpdateSubscribe(sub)
 	if err != nil {
+		log.Error("SaveOrUpdateSubscribe err  [%d] : %s", client_id, err)
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
 	log.Info("clientId %d save sub channel %d ", client.ClientID, channel_id)

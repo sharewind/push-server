@@ -38,7 +38,7 @@ func SaveOrUpdateSubscribe(sub *Subscribe) (err error) {
 	// log.Debug(" exist sub %#v , err %s", exist, err)
 	if err == nil && exist != nil {
 		update := func(c *mgo.Collection) error {
-			q := bson.M{"Subscribe_id": sub.ChannelID, "device_id": sub.DeviceID}
+			q := bson.M{"channel_id": sub.ChannelID, "device_id": sub.DeviceID}
 			m := bson.M{"$set": bson.M{"updated_at": time.Now().UnixNano()}}
 			fn := c.Update(q, m)
 			return fn
@@ -50,12 +50,12 @@ func SaveOrUpdateSubscribe(sub *Subscribe) (err error) {
 	}
 }
 
-// func FindSubscribeBySubscribeID(SubscribeID int64, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
+// func FindSubscribeBySubscribeID(channelID int64, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
 // 	results = []Subscribe{}
 // 	query := func(c *mgo.Collection) error {
-// 		q := bson.M{"Subscribe_id": SubscribeID}
+// 		q := bson.M{"channel_id": channelID}
 // 		if deviceType != ALLDevice {
-// 			q = bson.M{"Subscribe_id": SubscribeID, "device_type": deviceType}
+// 			q = bson.M{"channel_id": channelID, "device_type": deviceType}
 // 		}
 
 // 		fn := c.Find(q).Skip(skip).Limit(limit).All(&results)
