@@ -209,7 +209,7 @@ func (w *Worker) pushMessage(message *model.Message) {
 
 func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message) (err error) {
 	var buf bytes.Buffer
-	log.Debug("prepare send message: channel_id %d, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
+	log.Debug("prepare send message: channel_id %s, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
 	// broker_id,err := getBrokerForDevice(device_id)
 	// if err != nil || broker_id == nil{
 	// 	saveOfflineMessage(device_id, message_id)
@@ -242,7 +242,7 @@ func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message
 		return errors.New("broker offline")
 	}
 
-	log.Debug("send message success: channel_id %d, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
+	log.Debug("send message success: channel_id %s, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
 	return nil
 }
 

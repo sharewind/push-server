@@ -69,7 +69,7 @@ type client struct {
 	ClientID int64
 	Hostname string
 
-	SubChannel    int64
+	SubChannel    string
 	clientMsgChan chan *Message
 
 	SampleRate int32

@@ -7,11 +7,11 @@ import (
 )
 
 type Subscribe struct {
-	ChannelID  int64 `json:"channel_id" bson:"channel_id"`
-	DeviceID   int64 `json:"device_id" bson:"device_id"`
-	DeviceType int8  `json:"device_type" bson:"device_type"`
-	CreatedAt  int64 `json:"created_at" bson:"created_at"`
-	UpdatedAt  int64 `json:"updated_at" bson:"updated_at"`
+	ChannelID  string `json:"channel_id" bson:"channel_id"`
+	DeviceID   int64  `json:"device_id" bson:"device_id"`
+	DeviceType int8   `json:"device_type" bson:"device_type"`
+	CreatedAt  int64  `json:"created_at" bson:"created_at"`
+	UpdatedAt  int64  `json:"updated_at" bson:"updated_at"`
 }
 
 func SaveSubscribe(sub *Subscribe) (err error) {
@@ -23,7 +23,7 @@ func SaveSubscribe(sub *Subscribe) (err error) {
 	return err
 }
 
-func FindSubscribeByDeviceID(channelID int64, deviceID int64) (result *Subscribe, err error) {
+func FindSubscribeByDeviceID(channelID string, deviceID int64) (result *Subscribe, err error) {
 	result = &Subscribe{}
 	query := func(c *mgo.Collection) error {
 		fn := c.Find(bson.M{"channel_id": channelID, "device_id": deviceID}).One(&result)
@@ -50,7 +50,7 @@ func SaveOrUpdateSubscribe(sub *Subscribe) (err error) {
 	}
 }
 
-// func FindSubscribeBySubscribeID(channelID int64, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
+// func FindSubscribeBySubscribeID(channelID string, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
 // 	results = []Subscribe{}
 // 	query := func(c *mgo.Collection) error {
 // 		q := bson.M{"channel_id": channelID}
@@ -78,7 +78,7 @@ func ListSubscribe(skip int, limit int) (result *[]Subscribe, err error) {
 	return result, err
 }
 
-func CountSubscribe(channelId int64, deviceType int8) (result int, err error) {
+func CountSubscribe(channelId string, deviceType int8) (result int, err error) {
 	query := func(c *mgo.Collection) error {
 		var fn error
 		result, fn = c.Find(bson.M{}).Count()
@@ -88,7 +88,7 @@ func CountSubscribe(channelId int64, deviceType int8) (result int, err error) {
 	return result, err
 }
 
-func CountSubscribeByChannelId(channelId int64, deviceType int8) (result int, err error) {
+func CountSubscribeByChannelId(channelId string, deviceType int8) (result int, err error) {
 	if deviceType == ALLDevice {
 		query := func(c *mgo.Collection) error {
 			var fn error
@@ -107,7 +107,7 @@ func CountSubscribeByChannelId(channelId int64, deviceType int8) (result int, er
 	return result, err
 }
 
-func GetSubscribeByChannelId(channelId int64, skip int, limit int) (result *[]Subscribe, err error) {
+func GetSubscribeByChannelId(channelId string, skip int, limit int) (result *[]Subscribe, err error) {
 	log.Debug("GetMessageByChannelId")
 	result = &[]Subscribe{}
 	query := func(c *mgo.Collection) error {
@@ -118,7 +118,7 @@ func GetSubscribeByChannelId(channelId int64, skip int, limit int) (result *[]Su
 	return result, err
 }
 
-func FindSubscribeByChannelID(channelID int64, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
+func FindSubscribeByChannelID(channelID string, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
 	results = []Subscribe{}
 	query := func(c *mgo.Collection) error {
 		q := bson.M{"channel_id": channelID}

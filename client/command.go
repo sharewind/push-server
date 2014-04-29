@@ -110,7 +110,7 @@ func Ping() *Command {
 }
 
 // Publish creates a new Command to write a message to a given topic
-func Publish(client_id int64, channel_id int64, message_id int64, body []byte) *Command {
+func Publish(client_id int64, channel_id string, message_id int64, body []byte) *Command {
 	var params = [][]byte{[]byte(fmt.Sprintf("%d", client_id)), []byte(fmt.Sprintf("%d", channel_id)), []byte(fmt.Sprintf("%d", message_id))}
 	return &Command{[]byte("PUB"), params, body}
 }
@@ -147,7 +147,7 @@ func MultiPublish(topic string, bodies [][]byte) (*Command, error) {
 }
 
 // Subscribe creates a new Command to subscribe to the given topic/channel
-func Subscribe(channel_id int64) *Command {
+func Subscribe(channel_id string) *Command {
 	var params = [][]byte{[]byte(fmt.Sprintf("%d", channel_id))}
 	return &Command{[]byte("SUB"), params, nil}
 }

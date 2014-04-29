@@ -25,7 +25,7 @@ var log = logging.MustGetLogger("client")
 type Client struct {
 	ID         int64
 	brokerAddr string
-	SubChannel int64
+	SubChannel string
 
 	net.Conn
 
@@ -82,7 +82,7 @@ func (c *Client) Stop() {
 	c.wg.Wait()
 }
 
-func (c *Client) AutoPump(addr string, subChannelID int64) {
+func (c *Client) AutoPump(addr string, subChannelID string) {
 	c.SubChannel = subChannelID
 
 	go func() {
@@ -228,7 +228,7 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-func (c *Client) Subscribe(channel_id int64) error {
+func (c *Client) Subscribe(channel_id string) error {
 	cmd := Subscribe(channel_id)
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err := cmd.Write(c)

@@ -128,19 +128,19 @@ func (s *httpServer) messageListHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	idStr, err := reqParams.Get("channel_id")
+	id, err := reqParams.Get("channel_id")
 	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		log.Error(err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	// id, err := strconv.ParseInt(idStr, 10, 64)
+	// if err != nil {
+	// 	log.Error(err.Error())
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
 	skip, limit := GetSkipLimit(reqParams)
 	messages, err := model.GetMessageByChannelId(id, skip, limit)
 	if err != nil {
@@ -226,8 +226,8 @@ func (s *httpServer) subListHandler(w http.ResponseWriter, req *http.Request) {
 func (s *httpServer) subCountHandler(w http.ResponseWriter, req *http.Request) {
 	reqParams, _ := util.NewReqParams(req)
 	channelId, _ := reqParams.Get("channel_id")
-	id, _ := strconv.ParseInt(channelId, 10, 64)
-	result, err := model.CountSubscribe(id, 0)
+	// id, _ := strconv.ParseInt(channelId, 10, 64)
+	result, err := model.CountSubscribe(channelId, 0)
 	if err != nil {
 		log.Error(err.Error())
 		http.Error(w, err.Error(), 500)
@@ -283,13 +283,13 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "key error", 500)
 		}
 
-		idStr, err := reqParams.Get("id")
+		id, err := reqParams.Get("id")
 		if err != nil {
 			log.Error(err.Error())
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		id, _ := strconv.ParseInt(idStr, 10, 64)
+		// id, _ := strconv.ParseInt(idStr, 10, 64)
 
 		name, err := reqParams.Get("name")
 		if err != nil {
@@ -340,7 +340,8 @@ func (s *httpServer) channelHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		parts := strings.Split(matches[1], "/")
-		channelId, _ := strconv.ParseInt(parts[0], 10, 64)
+		channelId := parts[0]
+		// channelId, _ := strconv.ParseInt(parts[0], 10, 64)
 		channel, err := model.FindChannelByID(channelId)
 		if err != nil {
 			http.Error(w, "INVALID_CHANNEL", 500)

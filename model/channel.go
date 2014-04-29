@@ -7,7 +7,7 @@ import (
 
 //TODO need count success/failure
 type Channel struct {
-	ID           int64  `json:"id" bson:"_id"`
+	ID           string `json:"id" bson:"_id"`
 	Name         string `json:"name" bson:"name"`
 	CreatedAt    int64  `json:"created_at" bson:"created_at"`
 	Creator      string `json:"creator" bson:"creator"`
@@ -16,7 +16,7 @@ type Channel struct {
 	MessageCount int64  `json:"message_count" bson:"message_count"`
 }
 
-func FindChannelByID(ID int64) (result *Channel, err error) {
+func FindChannelByID(ID string) (result *Channel, err error) {
 	result = &Channel{}
 	query := func(c *mgo.Collection) error {
 		fn := c.FindId(ID).One(result)
@@ -38,7 +38,7 @@ func SaveChannel(channel *Channel) (err error) {
 	return err
 }
 
-func IncreaseChannelMessageCount(ID int64, delta int) {
+func IncreaseChannelMessageCount(ID string, delta int) {
 
 }
 
@@ -62,7 +62,7 @@ func CountChannel() (result int, err error) {
 	return result, err
 }
 
-func CheckOrCreateChannel(channel_id int64) (result bool) {
+func CheckOrCreateChannel(channel_id string) (result bool) {
 	_, err := FindChannelByID(channel_id)
 	if err != nil {
 		log.Debug("channel check not exist: %s", err.Error())

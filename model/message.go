@@ -14,7 +14,7 @@ type Message struct {
 	Expires    int64  `json:"expires" bson:"expires"`
 	DeviceType int8   `json:"device_type" bson:"device_type"`
 	PushType   int8   `json:"push_type" bson:"push_type"`
-	ChannelID  int64  `json:"channel_id" bson:"channel_id"`
+	ChannelID  string `json:"channel_id" bson:"channel_id"`
 	DeviceID   int64  `json:"device_id" bson:"device_id"`
 	OK         int    `json:"ok"`
 	Err        int    `json:"err"`
@@ -49,7 +49,7 @@ func ListMessage(skip int, limit int) (result *[]Message, err error) {
 	return result, err
 }
 
-func GetMessageByChannelId(channelId int64, skip int, limit int) (result *[]Message, err error) {
+func GetMessageByChannelId(channelId string, skip int, limit int) (result *[]Message, err error) {
 	log.Debug("GetMessageByChannelId")
 	result = &[]Message{}
 	query := func(c *mgo.Collection) error {
@@ -70,7 +70,7 @@ func GetMessageByDeviceId(deviceId int64, skip int, limit int) (result *[]Messag
 	return result, err
 }
 
-func CountMessageByChannelId(channelId int64) (result int, err error) {
+func CountMessageByChannelId(channelId string) (result int, err error) {
 	query := func(c *mgo.Collection) error {
 		var fn error
 		result, fn = c.Find(bson.M{"channel_id": channelId}).Count()

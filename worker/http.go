@@ -153,12 +153,12 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	channel_id, err := strconv.ParseInt(reqParams.Get("channel_id"), 10, 64)
-	if err != nil {
-		log.Error("failed to parse channel_id params - %s", err.Error())
-		util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
-		return
-	}
+	channel_id := reqParams.Get("channel_id")
+	// if err != nil {
+	// 	log.Error("failed to parse channel_id params - %s", err.Error())
+	// 	util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
+	// 	return
+	// }
 	_, err = model.FindChannelByID(channel_id)
 	if err != nil {
 		log.Error("can not find channel  - %s", err.Error())

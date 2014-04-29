@@ -102,7 +102,7 @@ func (p *protocol) cleanupClientConn(client *client) {
 		client.Close()
 		model.DelClientConn(client.ClientID)
 
-		if client.SubChannel != 0 && client.SubChannel != -1 {
+		if client.SubChannel != "" {
 			p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
 		}
 		// touch devie online
@@ -310,15 +310,15 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "SUB insufficient number of parameters")
 	}
 
-	channel_id, err := strconv.ParseInt(string(params[1]), 10, 64)
-	if err != nil {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
-	}
+	channel_id := string(params[1])
+	// if err != nil {
+	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
+	// }
 	client_id := client.ClientID
-	if err != nil {
-		log.Error("invalid client id [%s] err: %d", client.ClientID, err)
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
-	}
+	// if err != nil {
+	// 	log.Error("invalid client id [%s] err: %d", client.ClientID, err)
+	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
+	// }
 
 	// ok := model.CheckOrCreateChannel(channel_id)
 	// if ok == false {
@@ -343,7 +343,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		log.Error("SaveOrUpdateSubscribe err  [%d] : %s", client_id, err)
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
-	log.Info("clientId %d save sub channel %d ", client.ClientID, channel_id)
+	log.Info("clientId %d save sub channel %s ", client.ClientID, channel_id)
 
 	p.context.broker.AddClient(client.ClientID, channel_id, client)
 	log.Info("clientId %d sub channel %d success ", client.ClientID, channel_id)
@@ -540,7 +540,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	client_id, _ := strconv.ParseInt(string(params[1]), 10, 64)
-	channel_id, _ := strconv.ParseInt(string(params[2]), 10, 64)
+	channel_id := string(params[2])
 	message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
 
 	destClient, err := p.context.broker.GetClient(client_id, channel_id)

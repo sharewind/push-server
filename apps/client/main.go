@@ -14,7 +14,7 @@ import (
 var (
 	flagSet        = flag.NewFlagSet("client", flag.ExitOnError)
 	apiHttpAddress = flagSet.String("api-http-address", "0.0.0.0:8501", "<addr>:<port> to listen on for HTTP clients")
-	subChannel     = flagSet.Int64("sub-channel", int64(11111), "client sub channel id")
+	subChannel     = flagSet.String("sub-channel", "11111", "client sub channel id")
 )
 
 func main() {
