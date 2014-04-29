@@ -111,7 +111,7 @@ func Ping() *Command {
 
 // Publish creates a new Command to write a message to a given topic
 func Publish(client_id int64, channel_id string, message_id int64, body []byte) *Command {
-	var params = [][]byte{[]byte(fmt.Sprintf("%d", client_id)), []byte(fmt.Sprintf("%d", channel_id)), []byte(fmt.Sprintf("%d", message_id))}
+	var params = [][]byte{[]byte(fmt.Sprintf("%d", client_id)), []byte(channel_id), []byte(fmt.Sprintf("%d", message_id))}
 	return &Command{[]byte("PUB"), params, body}
 }
 
