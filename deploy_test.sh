@@ -1,6 +1,6 @@
 #!/bin/bash
 set -x
-target_ips="10.11.5.107"
+target_ips="192.168.105.136"
 target_dir="/opt/webapps/push"
 webapp="push"
 

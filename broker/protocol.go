@@ -135,7 +135,7 @@ func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) 
 func (p *protocol) Send(client *client, frameType int32, data []byte) error {
 	client.Lock()
 
-	client.SetWriteDeadline(time.Now().Add(time.Second))
+	client.SetWriteDeadline(time.Now().Add(time.Second * 10))
 	_, err := util.SendFramedResponse(client.Writer, frameType, data)
 	if err != nil {
 		client.Unlock()
@@ -565,7 +565,8 @@ func (p *protocol) ackPublish(client *client, ackType int32, clientID int64, msg
 	response := []byte(fmt.Sprintf("%d %d %d", ackType, clientID, msgID))
 	err = p.Send(client, util.FrameTypeAck, response)
 	if err != nil {
-		log.Error("send response to client error %s ", err)
+		log.Error("send response to worker_error %s ", err)
+		return util.NewFatalClientErr(err, "E_OP", "SEND ACK failed")
 	}
 	return err
 }

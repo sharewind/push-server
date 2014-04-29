@@ -8,6 +8,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rm -rfv $DIR/dist
 mkdir -p $DIR/dist
 
+arch=$(go env GOARCH)
+
 for os in linux ; do
     echo "... building v$version for $os/$arch"
     BUILD=$(mktemp -d -t push)

@@ -19,7 +19,7 @@ all: $(APPS) $(BENCHS)
 
 $(BLDDIR)/%:
 	@mkdir -p $(dir $@)
-	go build ${GOFLAGS} -o $(abspath $@) ./$*
+	go build ${GOFLAGS} -x -o $(abspath $@) ./$*
 
 $(BINARIES): %: $(BLDDIR)/%
 $(APPS): %: $(BLDDIR)/apps/%
