@@ -9,6 +9,7 @@ import (
 	"math"
 	"net"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 
 const maxTimeout = time.Hour
 
-var separatorBytes = []byte(" ")
+var separatorBytes = string(" ")
 var heartbeatBytes = []byte("_heartbeat_")
 var okBytes = []byte("OK")
 
@@ -28,7 +29,7 @@ type protocol struct {
 
 func (p *protocol) IOLoop(conn net.Conn) error {
 	var err error
-	var line []byte
+	var line string
 	var zeroTime time.Time
 
 	client := newClient(conn, p.context)
@@ -43,7 +44,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 
 		// ReadSlice does not allocate new space for the data each request
 		// ie. the returned slice is only valid until the next call to it
-		line, err = client.Reader.ReadSlice('\n')
+		line, err = client.Reader.ReadString('\n')
 		if err != nil {
 			break
 		}
@@ -54,7 +55,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
-		params := bytes.Split(line, separatorBytes)
+		params := strings.Split(line, separatorBytes)
 
 		if p.context.broker.options.Verbose {
 			log.Debug("PROTOCOL(V1): [%s] %s", client, params)
@@ -135,7 +136,7 @@ func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) 
 func (p *protocol) Send(client *client, frameType int32, data []byte) error {
 	client.Lock()
 
-	client.SetWriteDeadline(time.Now().Add(time.Second * 10))
+	client.SetWriteDeadline(time.Now().Add(time.Second))
 	_, err := util.SendFramedResponse(client.Writer, frameType, data)
 	if err != nil {
 		client.Unlock()
@@ -151,25 +152,25 @@ func (p *protocol) Send(client *client, frameType int32, data []byte) error {
 	return err
 }
 
-func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) Exec(client *client, params []string) ([]byte, error) {
 	switch {
-	case bytes.Equal(params[0], []byte("H")):
+	case params[0] == "H":
 		return p.HEARTBEAT(client, params)
-	case bytes.Equal(params[0], []byte("PUB")):
+	case params[0] == "PUB":
 		return p.PUB(client, params)
-	case bytes.Equal(params[0], []byte("NOP")):
+	case params[0] == "NOP":
 		return p.NOP(client, params)
-	case bytes.Equal(params[0], []byte("IDENTIFY")):
+	case params[0] == "IDENTIFY":
 		return p.IDENTIFY(client, params)
-	case bytes.Equal(params[0], []byte("SUB")):
+	case params[0] == "SUB":
 		return p.SUB(client, params)
-	case bytes.Equal(params[0], []byte("CLS")):
+	case params[0] == "CLS":
 		return p.CLS(client, params)
 	}
 	return nil, util.NewFatalClientErr(nil, "E_INVALID", fmt.Sprintf("invalid command %s", params[0]))
 }
 
-func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) IDENTIFY(client *client, params []string) ([]byte, error) {
 	var err error
 
 	if atomic.LoadInt32(&client.State) != StateInit {
@@ -296,7 +297,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) SUB(client *client, params []string) ([]byte, error) {
 	if atomic.LoadInt32(&client.State) != StateInit {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot SUB in current state")
 	}
@@ -437,8 +438,10 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 			// client.SendingMessage()
 			err = p.SendMessage(client, msg, &buf)
 			if err != nil {
+				atomic.AddUint64(&p.context.broker.ErrorCount, 1)
 				goto exit
 			}
+			atomic.AddUint64(&p.context.broker.FinishedCount, 1)
 			flushed = false
 		case <-client.ExitChan:
 			goto exit
@@ -494,12 +497,12 @@ func (p *protocol) checkOfflineMessage(client *client) {
 }
 
 // hearbeat
-func (p *protocol) HEARTBEAT(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) HEARTBEAT(client *client, params []string) ([]byte, error) {
 	// log.Debug("[%s] heartbeat received", client)
 	return []byte("H"), nil
 }
 
-func (p *protocol) CLS(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) CLS(client *client, params []string) ([]byte, error) {
 	if atomic.LoadInt32(&client.State) != StateSubscribed {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CLS in current state")
 	}
@@ -508,11 +511,11 @@ func (p *protocol) CLS(client *client, params [][]byte) ([]byte, error) {
 	return []byte("CLOSE_WAIT"), nil
 }
 
-func (p *protocol) NOP(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) NOP(client *client, params []string) ([]byte, error) {
 	return nil, nil
 }
 
-func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) PUB(client *client, params []string) ([]byte, error) {
 	// var err error
 	if client.Role != "$_@push_sign_$_kz_worker" {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID_REQUEST", "client can't pub message")
@@ -525,30 +528,32 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 
 	bodyLen, err := readLen(client.Reader, client.lenSlice)
 	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body size")
+		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "PUB failed to read body size")
 	}
 
 	if int64(bodyLen) > p.context.broker.options.MaxBodySize {
 		return nil, util.NewFatalClientErr(nil, "E_BAD_BODY",
-			fmt.Sprintf("IDENTIFY body too big %d > %d", bodyLen, p.context.broker.options.MaxBodySize))
+			fmt.Sprintf("PUB body too big %d > %d", bodyLen, p.context.broker.options.MaxBodySize))
 	}
 
 	body := make([]byte, bodyLen)
 	_, err = io.ReadFull(client.Reader, body)
 	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body")
+		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "PUB failed to read body")
 	}
 
 	client_id, _ := strconv.ParseInt(string(params[1]), 10, 64)
 	channel_id := string(params[2])
 	message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
+	atomic.AddUint64(&p.context.broker.MessageCount, 1)
 
 	destClient, err := p.context.broker.GetClient(client_id, channel_id)
 	if err != nil || destClient == nil {
 		err = p.ackPublish(client, util.ACK_OFF, client_id, message_id)
-		log.Debug("client %s is null", client_id)
+		log.Debug("error %s, client %d is null, params =%s", err, client_id, params)
 		return nil, err
 	}
+
 	// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
 
 	msg := &Message{
@@ -557,7 +562,7 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 		Timestamp: time.Now().UnixNano(),
 	}
 	destClient.clientMsgChan <- msg
-	err = p.ackPublish(client, util.ACT_ERR, client_id, message_id)
+	err = p.ackPublish(client, util.ACK_SUCCESS, client_id, message_id)
 	return nil, err
 }
 

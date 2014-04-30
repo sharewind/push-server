@@ -19,6 +19,8 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.pingHandler(w, req)
 	case "/info":
 		s.infoHandler(w, req)
+	case "/stat":
+		s.statsHandler(w, req)
 	case "/debug/pprof":
 		httpprof.Index(w, req)
 	case "/debug/pprof/cmdline":
@@ -52,4 +54,8 @@ func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {
 	// }{
 	// 	Version: util.BINARY_VERSION,
 	// })
+}
+
+func (s *httpServer) statsHandler(w http.ResponseWriter, req *http.Request) {
+	io.WriteString(w, s.context.broker.GetStats())
 }

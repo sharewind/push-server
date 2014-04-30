@@ -36,6 +36,17 @@ var ErrOverMaxInFlight = errors.New("over configure max-inflight")
 // returned from ConnectToLookupd when given lookupd address exists already
 var ErrLookupdAddressExists = errors.New("lookupd address already exists")
 
+type PubMessage struct {
+	DeviceID int64
+	Message  *model.Message
+}
+
+type AckMessage struct {
+	DeviceID  int64
+	MessageID int64
+	AckType   int32
+}
+
 type Worker struct {
 	sync.RWMutex
 	VerboseLogging bool // enable verbose logging
@@ -74,12 +85,19 @@ type Worker struct {
 	stopFlag    int32
 	stopHandler sync.Once
 
-	idChan          chan int64
-	messageCount    uint64
-	incomingMsgChan chan *model.Message
-	exitChan        chan int
-	waitGroup       WaitGroupWrapper
+	idChan            chan int64
+	incomingMsgChan   chan *model.Message
+	clientPubChan     chan *PubMessage
+	clientOfflineChan chan *PubMessage
+	ackChan           chan *AckMessage
+	exitChan          chan int
+	waitGroup         WaitGroupWrapper
 	// notifyChan      chan interface{}
+
+	PubCount      uint64
+	MessageCount  uint64
+	FinishedCount uint64
+	ErrorCount    uint64
 }
 
 // returned when a publish command is made against a Writer that is not connected
@@ -110,7 +128,10 @@ func NewWorker(options *workerOptions) *Worker {
 
 		DeflateLevel: 6,
 
-		incomingMsgChan: make(chan *model.Message),
+		incomingMsgChan:   make(chan *model.Message),
+		clientPubChan:     make(chan *PubMessage, 102400),
+		clientOfflineChan: make(chan *PubMessage, 102400),
+		ackChan:           make(chan *AckMessage, 102400),
 
 		pendingConnections: make(map[string]bool),
 		nsqConnections:     make(map[string]*nsqConn),
@@ -120,6 +141,10 @@ func NewWorker(options *workerOptions) *Worker {
 
 	w.waitGroup.Wrap(func() { w.idPump() })
 	w.waitGroup.Wrap(func() { w.Publish() })
+
+	for i := 0; i < 16; i++ {
+		w.waitGroup.Wrap(func() { w.router() })
+	}
 	return w
 }
 
@@ -143,7 +168,7 @@ func (w *Worker) PutMessage(msg *model.Message) error {
 	// 	return errors.New("exiting")
 	// }
 	w.incomingMsgChan <- msg
-	atomic.AddUint64(&w.messageCount, 1)
+	atomic.AddUint64(&w.PubCount, 1)
 	log.Debug("[worker]<PutMessage> %#v", msg)
 	return nil
 }
@@ -178,71 +203,81 @@ func (w *Worker) pushMessage(message *model.Message) {
 	// devices_ids := querySubscibeDevices(channel_id)
 	// skip := 0
 	limit := 1000
-	sum, err := model.CountSubscribeByChannelId(message.ChannelID, message.DeviceType)
+	total, err := model.CountSubscribeByChannelId(message.ChannelID, message.DeviceType)
 	if err != nil {
 		log.Error(err.Error())
 	}
-	time := (((sum - 1) / 1000) + 1)
-	log.Debug("worker all sum:%d time:%d", sum, time)
-	for i := 0; i < time; i++ {
-		log.Debug("start worker go time:%d", i)
-		go func(skip int, limit int) {
-			subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
-			if err != nil {
-				log.Debug("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
-				return
-			}
+	pageCount := (((total - 1) / 1000) + 1)
+	log.Debug("worker all sum:%d time:%d", total, pageCount)
 
-			for _, sub := range subs {
-				err := w.sendMessage2Client(&sub, message)
-				if err != nil {
-					//TODO: increase failure count
-					log.Debug("saveOfflineMessage clientID %d messageID %d", sub.DeviceID, message.ID)
-					model.SaveOfflineMessage(sub.DeviceID, message.ID)
-				}
-			}
-			log.Debug("end worker go time:%d", i)
-		}(i*limit, limit)
+	skip := 0
+	for i := 0; i < pageCount; i++ {
+		skip = i * limit
+
+		subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
+		if err != nil {
+			log.Debug("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
+			return
+		}
+
+		for _, sub := range subs {
+			atomic.AddUint64(&w.MessageCount, 1)
+			w.clientPubChan <- &PubMessage{DeviceID: sub.DeviceID, Message: message}
+		}
 	}
-
 }
 
-func (w *Worker) sendMessage2Client(sub *model.Subscribe, message *model.Message) (err error) {
-	var buf bytes.Buffer
-	log.Debug("prepare send message: channel_id %s, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
-	// broker_id,err := getBrokerForDevice(device_id)
-	// if err != nil || broker_id == nil{
-	// 	saveOfflineMessage(device_id, message_id)
-	// }
+func (w *Worker) router() {
+	for {
+		select {
+		case pub := <-w.clientPubChan:
+			//TODO save pub msg to mongo on stop
+			w.sendMessage2Client(pub)
+			// FIXME should process err on send
+		case pub := <-w.clientOfflineChan:
+			//TODO save offline msg to mongo on stop
+			model.SaveOfflineMessage(pub.DeviceID, pub.Message.ID)
+		case ack := <-w.ackChan:
+			w.processAck(ack)
+		case <-w.exitChan:
+			goto exit
 
-	broker_addr, err := model.GetClientConn(sub.DeviceID)
+		}
+	}
+exit:
+	log.Debug("publish msg exit!")
+}
+
+func (w *Worker) processAck(ack *AckMessage) {
+	if ack.AckType != ACK_SUCCESS {
+		model.SaveOfflineMessage(ack.DeviceID, ack.MessageID)
+		model.IncrMsgErrCount(ack.MessageID, 1)
+		model.IncrClientErrCount(ack.DeviceID, 1)
+	} else {
+		model.IncrMsgOKCount(ack.MessageID, 1)
+		model.IncrClientOKCount(ack.DeviceID, 1)
+	}
+}
+
+func (w *Worker) sendMessage2Client(pub *PubMessage) (err error) {
+
+	broker_addr, err := model.GetClientConn(pub.DeviceID)
 	if err != nil {
-		log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", sub.DeviceID, err)
+		log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", pub.DeviceID, err)
 		return errors.New("client offline")
 	}
 
-	// broker_addr := "localhost:8600"
-	//TODO should be a func
-	w.RLock()
-	conn, ok := w.nsqConnections[broker_addr]
-	w.RUnlock()
-
+	conn, ok := w.GetBroker(broker_addr)
 	log.Debug(" publish conn %s is %s", broker_addr, conn)
 	if !ok {
 		log.Debug("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
 		return errors.New("client offline")
 	}
 
-	cmd := client.Publish(sub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
-	log.Debug("send command")
-	err = conn.sendCommand(&buf, cmd)
-	if err != nil {
-		log.Debug("ERROR: send to [%s] command %s err %s ", conn, cmd, err)
-		w.stopBrokerConn(conn)
-		return errors.New("broker offline")
-	}
-
-	log.Debug("send message success: channel_id %s, device_id %d,  body %s", message.ChannelID, sub.DeviceID, message.Body)
+	message := pub.Message
+	cmd := client.Publish(pub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
+	conn.cmdChan <- cmd
+	log.Debug("send message success: channel_id %s, device_id %d,  body %s", message.ChannelID, pub.DeviceID, message.Body)
 	return nil
 }
 
@@ -271,6 +306,13 @@ func (n *Worker) idPump() {
 
 exit:
 	log.Debug("ID: closing")
+}
+
+func (w *Worker) GetBroker(broker_addr string) (conn *nsqConn, ok bool) {
+	w.RLock()
+	defer w.RUnlock()
+	conn, ok = w.nsqConnections[broker_addr]
+	return conn, ok
 }
 
 func (w *Worker) SafeConnectToBroker(addr []string) {
@@ -388,32 +430,32 @@ func (q *Worker) ConnectToBroker(addr string) error {
 		// 		connection, resp.MaxRdyCount, q.MaxInFlight())
 		// }
 
-		// if resp.TLSv1 {
-		// 	log.Debug("[%s] upgrading to TLS", connection)
-		// 	err := connection.upgradeTLS(q.TLSConfig)
-		// 	if err != nil {
-		// 		cleanupConnection()
-		// 		return fmt.Errorf("[%s] error (%s) upgrading to TLS", connection, err.Error())
-		// 	}
-		// }
+		if resp.TLSv1 {
+			log.Debug("[%s] upgrading to TLS", connection)
+			err := connection.upgradeTLS(q.TLSConfig)
+			if err != nil {
+				cleanupConnection()
+				return fmt.Errorf("[%s] error (%s) upgrading to TLS", connection, err.Error())
+			}
+		}
 
-		// if resp.Deflate {
-		// 	log.Debug("[%s] upgrading to Deflate", connection)
-		// 	err := connection.upgradeDeflate(q.DeflateLevel)
-		// 	if err != nil {
-		// 		connection.Close()
-		// 		return fmt.Errorf("[%s] error (%s) upgrading to deflate", connection, err.Error())
-		// 	}
-		// }
+		if resp.Deflate {
+			log.Debug("[%s] upgrading to Deflate", connection)
+			err := connection.upgradeDeflate(q.DeflateLevel)
+			if err != nil {
+				connection.Close()
+				return fmt.Errorf("[%s] error (%s) upgrading to deflate", connection, err.Error())
+			}
+		}
 
-		// if resp.Snappy {
-		// 	log.Debug("[%s] upgrading to Snappy", connection)
-		// 	err := connection.upgradeSnappy()
-		// 	if err != nil {
-		// 		connection.Close()
-		// 		return fmt.Errorf("[%s] error (%s) upgrading to snappy", connection, err.Error())
-		// 	}
-		// }
+		if resp.Snappy {
+			log.Debug("[%s] upgrading to Snappy", connection)
+			err := connection.upgradeSnappy()
+			if err != nil {
+				connection.Close()
+				return fmt.Errorf("[%s] error (%s) upgrading to snappy", connection, err.Error())
+			}
+		}
 	}
 	connection.enableReadBuffering()
 
@@ -471,12 +513,23 @@ func (w *Worker) messagePump(c *nsqConn) {
 			// Indicate drainReady because we will not pull any more off finishedMessages
 			// close(c.drainReady)
 			goto exit
+		case cmd := <-c.cmdChan:
+			err := c.sendCommand(&buf, cmd)
+			if err != nil {
+				atomic.AddUint64(&w.ErrorCount, 1)
+				log.Debug("[%s] error sending command %s - %s", c, cmd, err)
+				w.stopBrokerConn(c)
+				log.Debug("[%s] trigger stopBrokerConn on sendCommand err %s", c, err)
+				continue
+			}
+			atomic.AddUint64(&w.FinishedCount, 1)
 		case <-heartbeatChan:
 			cmd := client.HeartBeat()
 			err = c.sendCommand(&buf, cmd)
 			if err != nil {
 				log.Debug("ERROR: [%s] failed to writing heartbeat - %s", c, err)
 				w.stopBrokerConn(c)
+				log.Debug("[%s] trigger stopBrokerConn on sendCommand err %s", c, err)
 				continue
 			}
 			// shoud receive response
@@ -540,21 +593,13 @@ func (w *Worker) readLoop(c *nsqConn) {
 			log.Debug("[%s] ack receive %s", c, data)
 			params := bytes.Split(data, separatorBytes)
 			ackType, err := strconv.ParseInt(string(params[0]), 10, 64)
-			clientId, err := strconv.ParseInt(string(params[1]), 10, 64)
+			deviceId, err := strconv.ParseInt(string(params[1]), 10, 64)
 			msgId, err := strconv.ParseInt(string(params[2]), 10, 64)
 			if err != nil {
 				log.Debug("ERROR: parse msgId error %s", err)
-				break
+				continue
 			}
-
-			if ackType != int64(ACK_SUCCESS) {
-				model.SaveOfflineMessage(clientId, msgId)
-				model.IncrMsgErrCount(msgId, 1)
-				model.IncrClientErrCount(clientId, 1)
-			} else {
-				model.IncrMsgOKCount(msgId, 1)
-				model.IncrClientOKCount(clientId, 1)
-			}
+			w.ackChan <- &AckMessage{deviceId, msgId, int32(ackType)}
 
 		case FrameTypeError:
 			log.Debug("[%s] error from nsqd %s", c, data)
@@ -629,4 +674,9 @@ func (q *Worker) Stop() {
 
 	close(q.exitChan)
 	q.waitGroup.Wait()
+}
+
+func (w *Worker) GetStats() string {
+	result := fmt.Sprintf("[WorkerStatus]  MessageCount:%d, FinishedCount:%d, ErrorCount:%d ", atomic.LoadUint64(&w.MessageCount), atomic.LoadUint64(&w.FinishedCount), atomic.LoadUint64(&w.ErrorCount))
+	return result
 }

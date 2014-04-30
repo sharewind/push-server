@@ -289,6 +289,8 @@ exit:
 	log.Debug("client: [%s] exiting messagePump", c)
 }
 
+var MessageCount uint64 = 0
+
 func (c *Client) readLoop() {
 	rbuf := bufio.NewReader(c.Conn)
 	for {
@@ -309,11 +311,13 @@ func (c *Client) readLoop() {
 		switch frameType {
 		case FrameTypeMessage:
 			msg, err := broker.DecodeMessage(data)
-			log.Info("[%s] FrameTypeMessage receive  %s - %s", c.Conn.RemoteAddr(), msg.Id, msg.Body)
 			if err != nil {
 				handleError(c, fmt.Sprintf("[%s] error (%s) decoding message %s", c, err.Error(), data))
 				continue
 			}
+
+			atomic.AddUint64(&MessageCount, 1)
+			log.Info("[%s] FrameTypeMessage receive %d  %s - %s", c.Conn.RemoteAddr(), atomic.LoadUint64(&MessageCount), msg.Id, msg.Body)
 
 		case FrameTypeResponse:
 			switch {

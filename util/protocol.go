@@ -73,7 +73,7 @@ const (
 
 	ACK_OFF int32 = 2
 
-	ACT_ERR int32 = 3
+	ACK_ERR int32 = 3
 )
 
 // The amount of time nsqd will allow a client to idle, can be overriden

@@ -8,6 +8,7 @@ import (
 	"github.com/op/go-logging"
 	"net"
 	"sync"
+	"sync/atomic"
 	//"strings"
 )
 
@@ -18,6 +19,11 @@ var log = logging.MustGetLogger("broker")
 type Broker struct {
 	sync.RWMutex
 	options *brokerOptions
+
+	MessageCount  uint64
+	FinishedCount uint64
+	ErrorCount    uint64
+	ClientCount   uint64
 
 	//map is clientId_channeId : Client instance
 	clients map[string]*client
@@ -150,4 +156,13 @@ func (b *Broker) GetClient(clientID int64, channelID string) (client *client, er
 		return nil, errors.New("client does not exist")
 	}
 	return client, nil
+}
+
+func (b *Broker) GetStats() string {
+	b.RLock()
+	defer b.RUnlock()
+
+	b.ClientCount = uint64(len(b.clients))
+	result := fmt.Sprintf("ClientCount:%d, MessageCount:%d, FinishedCount:%d, ErrorCount:%d ", b.ClientCount, atomic.LoadUint64(&b.MessageCount), atomic.LoadUint64(&b.FinishedCount), atomic.LoadUint64(&b.ErrorCount))
+	return result
 }

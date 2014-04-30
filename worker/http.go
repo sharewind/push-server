@@ -76,6 +76,8 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.pingHandler(w, req)
 	case "/info":
 		s.infoHandler(w, req)
+	case "/stat":
+		s.statsHandler(w, req)
 	case "/debug/pprof":
 		httpprof.Index(w, req)
 	case "/debug/pprof/cmdline":
@@ -203,4 +205,8 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 
 	util.ApiResponse(w, 200, OK, Msg[OK], nil)
 	return
+}
+
+func (s *httpServer) statsHandler(w http.ResponseWriter, req *http.Request) {
+	io.WriteString(w, s.context.worker.GetStats())
 }
