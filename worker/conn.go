@@ -112,8 +112,8 @@ func (c *nsqConn) enableReadBuffering() {
 }
 
 func (c *nsqConn) sendCommand(buf *bytes.Buffer, cmd *client.Command) error {
-	c.Lock()
-	defer c.Unlock()
+	// c.Lock()
+	// defer c.Unlock()
 
 	buf.Reset()
 	err := cmd.Write(buf)
