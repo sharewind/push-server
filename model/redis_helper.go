@@ -11,13 +11,14 @@ var (
 	log         = logging.MustGetLogger("model")
 	redisPool   *redis.Pool
 	redisServer string = "10.10.79.123:15151" // host:port of server
-	password    string
+	// redisServer string = "localhost:6379" // host:port of server
+	password string
 )
 
 func init() {
 	redisPool = &redis.Pool{
 		MaxIdle:     3,
-		MaxActive:   30,
+		MaxActive:   160,
 		IdleTimeout: 240 * time.Second,
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", redisServer)

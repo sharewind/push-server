@@ -34,6 +34,12 @@ type identifyDataV2 struct {
 	MsgTimeout          int    `json:"msg_timeout"`
 }
 
+type ClientResponse struct {
+	response  []byte
+	err       error
+	frameType int32
+}
+
 type client struct {
 	sync.RWMutex
 
@@ -71,6 +77,7 @@ type client struct {
 
 	SubChannel    string
 	clientMsgChan chan *Message
+	responseChan  chan *ClientResponse
 
 	SampleRate int32
 
@@ -95,6 +102,7 @@ func newClient(conn net.Conn, context *context) *client {
 	c := &client{
 		context:       context,
 		clientMsgChan: make(chan *Message, 1),
+		responseChan:  make(chan *ClientResponse, 1),
 		Conn:          conn,
 
 		Reader: bufio.NewReaderSize(conn, DefaultBufferSize),

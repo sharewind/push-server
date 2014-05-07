@@ -34,6 +34,10 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 
 	client := newClient(conn, p.context)
 
+	messagePumpStartedChan := make(chan bool)
+	go p.messagePump(client, messagePumpStartedChan)
+	<-messagePumpStartedChan
+
 	for {
 		// log.Info("client[%s] HeartbeatInterval %d ", client, client.HeartbeatInterval)
 		if client.HeartbeatInterval > 0 {
@@ -113,10 +117,10 @@ func (p *protocol) cleanupClientConn(client *client) {
 }
 
 func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
-	// if p.context.broker.options.Verbose {
-	// log.Debug("PROTOCOL: writing msg(%s) to client(%s) - %s",
-	// msg.Id, client, msg.Body)
-	// }
+	if p.context.broker.options.Verbose {
+		log.Debug("PROTOCOL: writing msg(%s) to client(%s) - %s",
+			msg.Id, client, msg.Body)
+	}
 
 	buf.Reset()
 	err := msg.Write(buf)
@@ -129,11 +133,12 @@ func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) 
 		return err
 	}
 
-	log.Debug("PROTOCOL: Success writing msg(%s) to client(%s) - %s", msg.Id, client, msg.Body)
+	// log.Debug("PROTOCOL: Success writing msg(%s) to client(%s) - %s", msg.Id, client, msg.Body)
 	return nil
 }
 
 func (p *protocol) Send(client *client, frameType int32, data []byte) error {
+	// log.Debug("protol  send response %s", data)
 	client.Lock()
 
 	client.SetWriteDeadline(time.Now().Add(time.Second))
@@ -250,6 +255,17 @@ func (p *protocol) IDENTIFY(client *client, params []string) ([]byte, error) {
 		return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 	}
 
+	// should send client connected eventsf
+	log.Info("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
+	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
+	if err != nil {
+		log.Error("setClientConn" + err.Error())
+		return nil, util.NewFatalClientErr(nil, "E_IDENTIFY_FAILED", "set client conn error")
+	}
+
+	p.context.broker.AddClient(client.ClientID, "", client)
+	log.Info("clientId %d conn success ", client.ClientID)
+
 	err = p.Send(client, util.FrameTypeResponse, resp)
 	if err != nil {
 		return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -316,10 +332,6 @@ func (p *protocol) SUB(client *client, params []string) ([]byte, error) {
 	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
 	// }
 	client_id := client.ClientID
-	// if err != nil {
-	// 	log.Error("invalid client id [%s] err: %d", client.ClientID, err)
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
-	// }
 
 	// ok := model.CheckOrCreateChannel(channel_id)
 	// if ok == false {
@@ -332,7 +344,9 @@ func (p *protocol) SUB(client *client, params []string) ([]byte, error) {
 	}
 
 	//TODO send subscribe event
+	sub_id := <-p.context.broker.idChan
 	sub := &model.Subscribe{
+		ID:         sub_id,
 		ChannelID:  channel_id,
 		DeviceID:   client_id,
 		DeviceType: device.DeviceType,
@@ -346,19 +360,11 @@ func (p *protocol) SUB(client *client, params []string) ([]byte, error) {
 	}
 	log.Info("clientId %d save sub channel %s ", client.ClientID, channel_id)
 
-	p.context.broker.AddClient(client.ClientID, channel_id, client)
-	log.Info("clientId %d sub channel %d success ", client.ClientID, channel_id)
+	// p.context.broker.AddClient(client.ClientID, channel_id, client)
+	// log.Info("clientId %d sub channel %d success ", client.ClientID, channel_id)
 
 	// touch devie online
 	model.TouchDeviceOnline(client_id)
-
-	// should send client connected eventsf
-	log.Info("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
-	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
-	if err != nil {
-		log.Error(err.Error())
-		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
-	}
 
 	// increase channel sub count
 	// add client to channel sub list
@@ -369,10 +375,6 @@ func (p *protocol) SUB(client *client, params []string) ([]byte, error) {
 
 	atomic.StoreInt32(&client.State, StateSubscribed)
 	client.SubChannel = channel_id
-
-	messagePumpStartedChan := make(chan bool)
-	go p.messagePump(client, messagePumpStartedChan)
-	<-messagePumpStartedChan
 
 	go p.checkOfflineMessage(client)
 	// client.Channel = channel
@@ -431,6 +433,7 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 			}
 			flushed = true
 		case msg, ok := <-client.clientMsgChan:
+			// log.Debug("send client message")
 			if !ok {
 				goto exit
 			}
@@ -443,6 +446,46 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 			}
 			atomic.AddUint64(&p.context.broker.FinishedCount, 1)
 			flushed = false
+
+		case resp, ok := <-client.responseChan:
+			// log.Debug("log response chan %s", resp)
+			if !ok {
+				// log.Debug("not ok log response chan %s", resp)
+				goto exit
+			}
+
+			response, err := resp.response, resp.err
+			if err != nil {
+				// log.Debug("not3 ok log response chan %s", resp)
+				context := ""
+				if parentErr := err.(util.ChildErr).Parent(); parentErr != nil {
+					context = " - " + parentErr.Error()
+				}
+				log.Error("[%s] - %s%s", client, err.Error(), context)
+
+				sendErr := p.Send(client, util.FrameTypeError, []byte(err.Error()))
+				if sendErr != nil {
+					goto exit
+				}
+
+				// errors of type FatalClientErr should forceably close the connection
+				if _, ok := err.(*util.FatalClientErr); ok {
+					goto exit
+				}
+				continue
+			}
+
+			if response != nil {
+				// log.Debug("not4 ok log response chan %s", resp)
+				err = p.Send(client, util.FrameTypeResponse, response)
+				if err != nil {
+					log.Error("send response to client error %s ", err)
+					// log.Debug("not5 ok log response chan %s", resp)
+					goto exit
+				}
+			}
+			// log.Debug("send ack sueccss ..... finished ")
+
 		case <-client.ExitChan:
 			goto exit
 		}
@@ -524,7 +567,7 @@ func (p *protocol) PUB(client *client, params []string) ([]byte, error) {
 	if len(params) < 3 {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")
 	}
-	log.Debug("receive params on sub  %s", params)
+	// log.Debug("receive params on sub  %s", params)
 
 	bodyLen, err := readLen(client.Reader, client.lenSlice)
 	if err != nil {
@@ -547,33 +590,54 @@ func (p *protocol) PUB(client *client, params []string) ([]byte, error) {
 	message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
 	atomic.AddUint64(&p.context.broker.MessageCount, 1)
 
-	destClient, err := p.context.broker.GetClient(client_id, channel_id)
-	if err != nil || destClient == nil {
-		err = p.ackPublish(client, util.ACK_OFF, client_id, message_id)
-		log.Debug("error %s, client %d is null, params =%s", err, client_id, params)
-		return nil, err
-	}
-
-	// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
-
-	msg := &Message{
-		Id:        util.Guid(message_id).Hex(),
-		Body:      body,
-		Timestamp: time.Now().UnixNano(),
-	}
-	destClient.clientMsgChan <- msg
-	err = p.ackPublish(client, util.ACK_SUCCESS, client_id, message_id)
-	return nil, err
+	p.context.broker.pubChan <- &PubMessage{clientID: client_id,
+		messageID: message_id,
+		channelID: channel_id,
+		pubClient: client,
+		body:      body}
+	// log.Debug("receive params on sub  %s", params)
+	return nil, nil
 }
 
-func (p *protocol) ackPublish(client *client, ackType int32, clientID int64, msgID int64) (err error) {
-	response := []byte(fmt.Sprintf("%d %d %d", ackType, clientID, msgID))
-	err = p.Send(client, util.FrameTypeAck, response)
-	if err != nil {
-		log.Error("send response to worker_error %s ", err)
-		return util.NewFatalClientErr(err, "E_OP", "SEND ACK failed")
+func (b *Broker) router() {
+	log.Debug("router start ..............")
+	for {
+		select {
+		case pub := <-b.pubChan:
+			// log.Debug("process on pub %s", pub)
+			destClient, err := b.GetClient(pub.clientID, "")
+			if err != nil || destClient == nil {
+				ack := AckPublish(util.ACK_OFF, pub.clientID, pub.messageID)
+				pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
+				log.Debug("error %s, client %d is null, params =%s", err, pub.clientID, pub)
+				continue
+			}
+
+			// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
+
+			msg := &Message{
+				Id:        util.Guid(pub.messageID).Hex(),
+				Body:      pub.body,
+				Timestamp: time.Now().UnixNano(),
+			}
+			destClient.clientMsgChan <- msg
+			ack := AckPublish(util.ACK_SUCCESS, pub.clientID, pub.messageID)
+			// log.Debug("put client msg in chan")
+			pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
+			// log.Debug("ack chan finished")
+		case <-b.exitChan:
+			goto exit
+
+		}
 	}
-	return err
+exit:
+	log.Debug("broker exit router")
+
+}
+
+func AckPublish(ackType int32, clientID int64, msgID int64) []byte {
+	response := []byte(fmt.Sprintf("%d %d %d", ackType, clientID, msgID))
+	return response
 }
 
 func readLen(r io.Reader, tmp []byte) (int32, error) {

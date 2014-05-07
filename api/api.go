@@ -1,8 +1,12 @@
 package api
 
 import (
+	"crypto/md5"
 	"github.com/op/go-logging"
+	"hash/crc32"
+	"io"
 	"net"
+	"os"
 	"runtime"
 	"time"
 
@@ -18,7 +22,7 @@ type PushAPI struct {
 	idChan        chan int64
 	exitChan      chan int
 	waitGroup     util.WaitGroupWrapper
-	IdSeq         int64
+	IDSeq         int64
 }
 
 // NewWriter returns an instance of Writer for the specified address
@@ -33,11 +37,21 @@ func NewPushAPI(httpAddress *string, brokerTcpAddress *string) *PushAPI {
 		log.Fatal(err)
 	}
 
+	hostname, err := os.Hostname()
+	//hostname := "sohu"
+	if err != nil {
+		log.Fatal(err)
+	}
+	h := md5.New()
+	io.WriteString(h, hostname)
+	ID := int64(crc32.ChecksumIEEE(h.Sum(nil)) % 1024)
+
 	p := &PushAPI{
 		httpAddr:      httpAddr,
 		brokerTcpAddr: brokerTcpAddress,
 		idChan:        make(chan int64, 4096),
 		exitChan:      make(chan int),
+		IDSeq:         ID,
 	}
 	return p
 }
@@ -59,7 +73,7 @@ func (p *PushAPI) idPump() {
 	factory := &util.GuidFactory{}
 	lastError := time.Now()
 	for {
-		id, err := factory.NewGUID(p.IdSeq)
+		id, err := factory.NewGUID(p.IDSeq)
 		if err != nil {
 			now := time.Now()
 			if now.Sub(lastError) > time.Second {

@@ -25,7 +25,7 @@ var (
 )
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
+	runtime.GOMAXPROCS(runtime.NumCPU() * 8)
 	flagSet.Parse(os.Args[1:])
 
 	exitChan := make(chan int)

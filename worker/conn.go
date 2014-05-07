@@ -79,7 +79,7 @@ func newNSQConn(rdyChan chan *nsqConn, addr string,
 		lastMsgTimestamp: time.Now().UnixNano(),
 
 		// finishedMessages: make(chan *FinishedMessage),
-		cmdChan: make(chan *client.Command),
+		cmdChan: make(chan *client.Command, 10000),
 		// rdyChan:    rdyChan,
 		exitChan:   make(chan int),
 		drainReady: make(chan int),

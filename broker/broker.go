@@ -7,14 +7,24 @@ import (
 	"fmt"
 	"github.com/op/go-logging"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 	//"strings"
 )
 
-const DefaultClientMapSize = 10000
+const DefaultClientMapSize = 1000000
 
 var log = logging.MustGetLogger("broker")
+
+type PubMessage struct {
+	clientID  int64
+	messageID int64
+	channelID string
+	body      []byte
+	pubClient *client //TODO should be a finishedChan
+}
 
 type Broker struct {
 	sync.RWMutex
@@ -35,6 +45,8 @@ type Broker struct {
 	tlsConfig    *tls.Config
 
 	exitChan  chan int
+	idChan    chan int64
+	pubChan   chan *PubMessage
 	waitGroup util.WaitGroupWrapper
 }
 
@@ -73,6 +85,8 @@ func NewBroker(options *brokerOptions) *Broker {
 		httpAddr: httpAddr,
 		clients:  make(map[string]*client, DefaultClientMapSize), //default client map size
 		exitChan: make(chan int),
+		idChan:   make(chan int64, 4096),
+		pubChan:  make(chan *PubMessage, 1000000),
 		// notifyChan: make(chan interface{}),
 		tlsConfig: tlsConfig,
 	}
@@ -101,6 +115,11 @@ func (b *Broker) Main() {
 	b.httpListener = httpListener
 	httpServer := &httpServer{context: context}
 	b.waitGroup.Wrap(func() { util.HTTPServer(b.httpListener, httpServer) })
+	b.waitGroup.Wrap(func() { b.idPump() })
+
+	for i := 0; i < runtime.NumCPU(); i++ {
+		b.waitGroup.Wrap(func() { b.router() })
+	}
 }
 
 func (b *Broker) Exit() {
@@ -116,6 +135,32 @@ func (b *Broker) Exit() {
 	// could potentially starve items in process and deadlock)
 	close(b.exitChan)
 	b.waitGroup.Wait()
+}
+
+func (b *Broker) idPump() {
+	factory := &util.GuidFactory{}
+	lastError := time.Now()
+	for {
+		id, err := factory.NewGUID(b.options.ID)
+		if err != nil {
+			now := time.Now()
+			if now.Sub(lastError) > time.Second {
+				// only print the error once/second
+				log.Error("%s", err.Error())
+				lastError = now
+			}
+			runtime.Gosched()
+			continue
+		}
+		select {
+		case b.idChan <- id:
+		case <-b.exitChan:
+			goto exit
+		}
+	}
+
+exit:
+	log.Debug("ID Pump: closing")
 }
 
 // AddClient adds a client to the Channel's client list

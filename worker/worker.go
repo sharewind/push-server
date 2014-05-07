@@ -3,12 +3,16 @@ package worker
 import (
 	// "bufio"
 	"bytes"
+	"crypto/md5"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/op/go-logging"
+	"hash/crc32"
+	"io"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -129,9 +133,9 @@ func NewWorker(options *workerOptions) *Worker {
 		DeflateLevel: 6,
 
 		incomingMsgChan:   make(chan *model.Message),
-		clientPubChan:     make(chan *PubMessage, 102400),
-		clientOfflineChan: make(chan *PubMessage, 102400),
-		ackChan:           make(chan *AckMessage, 102400),
+		clientPubChan:     make(chan *PubMessage, 1024000),
+		clientOfflineChan: make(chan *PubMessage, 1024000),
+		ackChan:           make(chan *AckMessage, 1024000),
 
 		pendingConnections: make(map[string]bool),
 		nsqConnections:     make(map[string]*nsqConn),
@@ -140,16 +144,17 @@ func NewWorker(options *workerOptions) *Worker {
 	}
 
 	w.waitGroup.Wrap(func() { w.idPump() })
-	w.waitGroup.Wrap(func() { w.Publish() })
+	// w.waitGroup.Wrap(func() { w.Publish() })
 
-	for i := 0; i < 16; i++ {
-		w.waitGroup.Wrap(func() { w.router() })
-	}
 	return w
 }
 
 func (w *Worker) Main() {
 	context := &context{w}
+
+	for i := 0; i < 160; i++ {
+		w.waitGroup.Wrap(func() { w.router() })
+	}
 
 	httpListener, err := net.Listen("tcp", w.httpAddr.String())
 	if err != nil {
@@ -182,62 +187,59 @@ func (w *Worker) PutMessage(msg *model.Message) error {
 // 	c.wg.Wait()
 // }
 
-func (w *Worker) Publish() {
-	for {
-		select {
-		case message := <-w.incomingMsgChan:
-			log.Debug("get imcoming %s", message)
-			go w.pushMessage(message)
-		case <-w.exitChan:
-			goto exit
-
-		}
-	}
-exit:
-	log.Debug("publish msg exit!")
-}
-
 func (w *Worker) pushMessage(message *model.Message) {
 	log.Debug("[worker]<pushMessage> %#v", message)
 	// save message on mongodb
 	// devices_ids := querySubscibeDevices(channel_id)
 	// skip := 0
 	limit := 1000
-	total, err := model.CountSubscribeByChannelId(message.ChannelID, message.DeviceType)
-	if err != nil {
-		log.Error(err.Error())
-	}
-	pageCount := (((total - 1) / 1000) + 1)
-	log.Debug("worker all sum:%d time:%d", total, pageCount)
+	// total, err := model.CountSubscribeByChannelId(message.ChannelID, message.DeviceType)
+	// if err != nil {
+	// 	log.Error(err.Error())
+	// }
+	// pageCount := (((total - 1) / 1000) + 1)
+	// log.Debug("worker all sum:%d time:%d", total, pageCount)
 
-	skip := 0
-	for i := 0; i < pageCount; i++ {
-		skip = i * limit
-
-		subs, err := model.FindSubscribeByChannelID(message.ChannelID, message.DeviceType, skip, limit)
+	lastID := int64(0)
+	for i := 0; ; i++ {
+		subs, err := model.FindSubscribeByChannelID(lastID, message.ChannelID, message.DeviceType, limit)
 		if err != nil {
 			log.Debug("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
 			return
 		}
 
+		if subs == nil || len(subs) == 0 {
+			break
+		}
+
 		for _, sub := range subs {
 			atomic.AddUint64(&w.MessageCount, 1)
 			w.clientPubChan <- &PubMessage{DeviceID: sub.DeviceID, Message: message}
+			lastID = sub.ID
 		}
+		log.Debug("get subs page %d  count %d  lastID %d finished!", i, len(subs), lastID)
 	}
+	log.Debug("get subs_all finished!.........")
 }
 
 func (w *Worker) router() {
+	log.Debug("router start ...........")
 	for {
 		select {
+		case message := <-w.incomingMsgChan:
+			log.Debug("get imcoming %s", message)
+			w.pushMessage(message)
 		case pub := <-w.clientPubChan:
+			// log.Debug("get pub  %s", pub)
 			//TODO save pub msg to mongo on stop
 			w.sendMessage2Client(pub)
 			// FIXME should process err on send
 		case pub := <-w.clientOfflineChan:
+			// log.Debug("get off %s", pub)
 			//TODO save offline msg to mongo on stop
 			model.SaveOfflineMessage(pub.DeviceID, pub.Message.ID)
 		case ack := <-w.ackChan:
+			log.Debug("get ack %s", ack)
 			w.processAck(ack)
 		case <-w.exitChan:
 			goto exit
@@ -245,10 +247,11 @@ func (w *Worker) router() {
 		}
 	}
 exit:
-	log.Debug("publish msg exit!")
+	log.Debug("msg router exit!")
 }
 
 func (w *Worker) processAck(ack *AckMessage) {
+	log.Debug("process ack  %s", ack)
 	if ack.AckType != ACK_SUCCESS {
 		model.SaveOfflineMessage(ack.DeviceID, ack.MessageID)
 		model.IncrMsgErrCount(ack.MessageID, 1)
@@ -263,9 +266,10 @@ func (w *Worker) sendMessage2Client(pub *PubMessage) (err error) {
 
 	broker_addr, err := model.GetClientConn(pub.DeviceID)
 	if err != nil {
-		log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", pub.DeviceID, err)
+		// log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", pub.DeviceID, err)
 		return errors.New("client offline")
 	}
+	log.Debug("ERROR: GetClientConn by redis  [%d]   %s ", pub.DeviceID, broker_addr)
 
 	conn, ok := w.GetBroker(broker_addr)
 	log.Debug(" publish conn %s is %s", broker_addr, conn)
@@ -282,9 +286,19 @@ func (w *Worker) sendMessage2Client(pub *PubMessage) (err error) {
 }
 
 func (n *Worker) idPump() {
+	hostname, err := os.Hostname()
+	//hostname := "sohu"
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	h := md5.New()
+	io.WriteString(h, hostname)
+	ID := int64(crc32.ChecksumIEEE(h.Sum(nil)) % 1024)
+
 	factory := &GuidFactory{}
 	lastError := time.Now()
-	WorkerID := int64(2) //TODO
+	WorkerID := int64(ID) //TODO
 	for {
 		id, err := factory.NewGUID(WorkerID)
 		if err != nil {
@@ -311,6 +325,7 @@ exit:
 func (w *Worker) GetBroker(broker_addr string) (conn *nsqConn, ok bool) {
 	w.RLock()
 	defer w.RUnlock()
+	// log.Debug("GetBroker conns = %s,  broker= %s", w.nsqConnections, broker_addr)
 	conn, ok = w.nsqConnections[broker_addr]
 	return conn, ok
 }
@@ -560,6 +575,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 		}
 
 		frameType, data, err := c.readUnpackedResponse()
+		// log.Info("[%s] readUnpackResponse %s ", c, data)
 		if err != nil {
 			handleError(w, c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
 			continue
@@ -634,7 +650,7 @@ func (q *Worker) cleanupConnection(c *nsqConn) {
 	left := len(q.nsqConnections)
 	q.Unlock()
 
-	log.Debug("clean up conn[%s] success!", c)
+	// log.Debug("clean up conn[%s] success!", c)
 	log.Debug("there are %d connections left alive", left)
 }
 

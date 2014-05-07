@@ -7,6 +7,7 @@ import (
 )
 
 type Subscribe struct {
+	ID         int64  `json:"id" bson:"_id"`
 	ChannelID  string `json:"channel_id" bson:"channel_id"`
 	DeviceID   int64  `json:"device_id" bson:"device_id"`
 	DeviceType int8   `json:"device_type" bson:"device_type"`
@@ -118,17 +119,17 @@ func GetSubscribeByChannelId(channelId string, skip int, limit int) (result *[]S
 	return result, err
 }
 
-func FindSubscribeByChannelID(channelID string, deviceType int8, skip int, limit int) (results []Subscribe, err error) {
+func FindSubscribeByChannelID(lastID int64, channelID string, deviceType int8, limit int) (results []Subscribe, err error) {
 	results = []Subscribe{}
 	query := func(c *mgo.Collection) error {
-		q := bson.M{"channel_id": channelID}
-		if deviceType != ALLDevice {
-			q = bson.M{"channel_id": channelID, "device_type": deviceType}
-		}
+		q := bson.M{"_id": bson.M{"$gt": lastID}, "channel_id": channelID}
+		// if deviceType != ALLDevice {
+		// 	q = bson.M{"_id": bson.M{"$gt": lastID}, "channel_id": channelID, "device_type": deviceType}
+		// }
 
-		fn := c.Find(q).Skip(skip).Limit(limit).All(&results)
+		fn := c.Find(q).Sort("_id").Limit(limit).All(&results)
 		if limit < 0 {
-			fn = c.Find(q).Skip(skip).All(&results)
+			fn = c.Find(q).Sort("_id").All(&results)
 		}
 		return fn
 	}
