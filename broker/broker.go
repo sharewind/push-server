@@ -105,7 +105,10 @@ func (b *Broker) Main() {
 
 	b.tcpListener = tcpListener
 	tcpServer := &tcpServer{context: context}
-	b.waitGroup.Wrap(func() { util.TCPServer(b.tcpListener, tcpServer) })
+
+	for i := 0; i < 4; i++ {
+		b.waitGroup.Wrap(func() { util.TCPServer(b.tcpListener, tcpServer) })
+	}
 
 	httpListener, err := net.Listen("tcp", b.httpAddr.String())
 	if err != nil {
@@ -210,4 +213,13 @@ func (b *Broker) GetStats() string {
 	b.ClientCount = uint64(len(b.clients))
 	result := fmt.Sprintf("ClientCount:%d, MessageCount:%d, FinishedCount:%d, ErrorCount:%d ", b.ClientCount, atomic.LoadUint64(&b.MessageCount), atomic.LoadUint64(&b.FinishedCount), atomic.LoadUint64(&b.ErrorCount))
 	return result
+}
+
+func (b *Broker) ResetStats() {
+	b.RLock()
+	defer b.RUnlock()
+
+	atomic.StoreUint64(&b.MessageCount, 0)
+	atomic.StoreUint64(&b.FinishedCount, 0)
+	atomic.StoreUint64(&b.ErrorCount, 0)
 }
