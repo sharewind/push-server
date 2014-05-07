@@ -13,7 +13,8 @@ import (
 	"code.sohuno.com/kzapp/push-server/util"
 )
 
-var log = logging.MustGetLogger("api")
+var module = "api"
+var log = logging.MustGetLogger(module)
 
 type PushAPI struct {
 	httpAddr      *net.TCPAddr
@@ -23,10 +24,11 @@ type PushAPI struct {
 	exitChan      chan int
 	waitGroup     util.WaitGroupWrapper
 	IDSeq         int64
+	logLevel      *string
 }
 
 // NewWriter returns an instance of Writer for the specified address
-func NewPushAPI(httpAddress *string, brokerTcpAddress *string) *PushAPI {
+func NewPushAPI(httpAddress *string, brokerTcpAddress *string, logLevel *string) *PushAPI {
 
 	if len(*httpAddress) == 0 {
 		log.Fatalf("httpAddress required.")
@@ -52,11 +54,15 @@ func NewPushAPI(httpAddress *string, brokerTcpAddress *string) *PushAPI {
 		idChan:        make(chan int64, 4096),
 		exitChan:      make(chan int),
 		IDSeq:         ID,
+		logLevel:      logLevel,
 	}
 	return p
 }
 
 func (p *PushAPI) Main() {
+
+	util.SetLevel(module, p.logLevel)
+
 	context := &context{p}
 
 	httpListener, err := net.Listen("tcp", p.httpAddr.String())
