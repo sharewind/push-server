@@ -71,7 +71,10 @@ func (p *PushAPI) Main() {
 	}
 	p.httpListener = httpListener
 	httpServer := &httpServer{context: context}
-	p.waitGroup.Wrap(func() { util.HTTPServer(p.httpListener, httpServer) })
+
+	for i := 0; i < 4; i++ {
+		p.waitGroup.Wrap(func() { util.HTTPServer(p.httpListener, httpServer) })
+	}
 	p.waitGroup.Wrap(func() { p.idPump() })
 }
 

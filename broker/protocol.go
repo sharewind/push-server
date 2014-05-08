@@ -9,7 +9,7 @@ import (
 	"math"
 	"net"
 	"strconv"
-	"strings"
+	// "strings"
 	"sync/atomic"
 	"time"
 
@@ -19,7 +19,7 @@ import (
 
 const maxTimeout = time.Hour
 
-var separatorBytes = string(" ")
+var separatorBytes = []byte(" ")
 var heartbeatBytes = []byte("_heartbeat_")
 var okBytes = []byte("OK")
 
@@ -29,7 +29,7 @@ type protocol struct {
 
 func (p *protocol) IOLoop(conn net.Conn) error {
 	var err error
-	var line string
+	var line []byte
 	var zeroTime time.Time
 
 	client := newClient(conn, p.context)
@@ -48,7 +48,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 
 		// ReadSlice does not allocate new space for the data each request
 		// ie. the returned slice is only valid until the next call to it
-		line, err = client.Reader.ReadString('\n')
+		line, err = client.Reader.ReadBytes('\n')
 		if err != nil {
 			break
 		}
@@ -59,7 +59,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
-		params := strings.Split(line, separatorBytes)
+		params := bytes.Split(line, separatorBytes)
 
 		if p.context.broker.options.Verbose {
 			log.Debug("PROTOCOL(V1): [%s] %s", client, params)
@@ -157,25 +157,25 @@ func (p *protocol) Send(client *client, frameType int32, data []byte) error {
 	return err
 }
 
-func (p *protocol) Exec(client *client, params []string) ([]byte, error) {
+func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
 	switch {
-	case params[0] == "H":
+	case bytes.Equal(params[0], []byte("H")):
 		return p.HEARTBEAT(client, params)
-	case params[0] == "PUB":
+	case bytes.Equal(params[0], []byte("PUB")):
 		return p.PUB(client, params)
-	case params[0] == "NOP":
+	case bytes.Equal(params[0], []byte("NOP")):
 		return p.NOP(client, params)
-	case params[0] == "IDENTIFY":
+	case bytes.Equal(params[0], []byte("IDENTIFY")):
 		return p.IDENTIFY(client, params)
-	case params[0] == "SUB":
+	case bytes.Equal(params[0], []byte("SUB")):
 		return p.SUB(client, params)
-	case params[0] == "CLS":
+	case bytes.Equal(params[0], []byte("CLS")):
 		return p.CLS(client, params)
 	}
 	return nil, util.NewFatalClientErr(nil, "E_INVALID", fmt.Sprintf("invalid command %s", params[0]))
 }
 
-func (p *protocol) IDENTIFY(client *client, params []string) ([]byte, error) {
+func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	var err error
 
 	if atomic.LoadInt32(&client.State) != StateInit {
@@ -313,7 +313,7 @@ func (p *protocol) IDENTIFY(client *client, params []string) ([]byte, error) {
 	return nil, nil
 }
 
-func (p *protocol) SUB(client *client, params []string) ([]byte, error) {
+func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	if atomic.LoadInt32(&client.State) != StateInit {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot SUB in current state")
 	}
@@ -540,12 +540,12 @@ func (p *protocol) checkOfflineMessage(client *client) {
 }
 
 // hearbeat
-func (p *protocol) HEARTBEAT(client *client, params []string) ([]byte, error) {
+func (p *protocol) HEARTBEAT(client *client, params [][]byte) ([]byte, error) {
 	// log.Debug("[%s] heartbeat received", client)
 	return []byte("H"), nil
 }
 
-func (p *protocol) CLS(client *client, params []string) ([]byte, error) {
+func (p *protocol) CLS(client *client, params [][]byte) ([]byte, error) {
 	if atomic.LoadInt32(&client.State) != StateSubscribed {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CLS in current state")
 	}
@@ -554,11 +554,11 @@ func (p *protocol) CLS(client *client, params []string) ([]byte, error) {
 	return []byte("CLOSE_WAIT"), nil
 }
 
-func (p *protocol) NOP(client *client, params []string) ([]byte, error) {
+func (p *protocol) NOP(client *client, params [][]byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (p *protocol) PUB(client *client, params []string) ([]byte, error) {
+func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	// var err error
 	if client.Role != "$_@push_sign_$_kz_worker" {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID_REQUEST", "client can't pub message")

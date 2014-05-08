@@ -78,6 +78,8 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.infoHandler(w, req)
 	case "/stat":
 		s.statsHandler(w, req)
+	case "/reset":
+		s.resetHandler(w, req)
 	case "/debug/pprof":
 		httpprof.Index(w, req)
 	case "/debug/pprof/cmdline":
@@ -209,4 +211,8 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 
 func (s *httpServer) statsHandler(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, s.context.worker.GetStats())
+}
+
+func (s *httpServer) resetHandler(w http.ResponseWriter, req *http.Request) {
+	s.context.worker.ResetStats()
 }

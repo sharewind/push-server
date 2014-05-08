@@ -269,10 +269,10 @@ func (w *Worker) sendMessage2Client(pub *PubMessage) (err error) {
 		// log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", pub.DeviceID, err)
 		return errors.New("client offline")
 	}
-	log.Debug("ERROR: GetClientConn by redis  [%d]   %s ", pub.DeviceID, broker_addr)
+	// log.Debug("GetClientConn by redis  [%d]   %s ", pub.DeviceID, broker_addr)
 
 	conn, ok := w.GetBroker(broker_addr)
-	log.Debug(" publish conn %s is %s", broker_addr, conn)
+	// log.Debug(" publish conn %s is %s", broker_addr, conn)
 	if !ok {
 		log.Debug("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
 		return errors.New("client offline")
@@ -281,7 +281,7 @@ func (w *Worker) sendMessage2Client(pub *PubMessage) (err error) {
 	message := pub.Message
 	cmd := client.Publish(pub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
 	conn.cmdChan <- cmd
-	log.Debug("send message success: channel_id %s, device_id %d,  body %s", message.ChannelID, pub.DeviceID, message.Body)
+	// log.Debug("send message success: channel_id %s, device_id %d,  body %s", message.ChannelID, pub.DeviceID, message.Body)
 	return nil
 }
 
@@ -566,7 +566,7 @@ exit:
 
 func (w *Worker) readLoop(c *nsqConn) {
 	for {
-		log.Info("[%s] client readLoop", c)
+		// log.Info("[%s] client readLoop", c)
 
 		if atomic.LoadInt32(&w.stopFlag) == 1 || atomic.LoadInt32(&c.stopFlag) == 1 {
 			log.Info("[%s] stopBrokerConn on client stopFlag ", c)
@@ -695,4 +695,10 @@ func (q *Worker) Stop() {
 func (w *Worker) GetStats() string {
 	result := fmt.Sprintf("[WorkerStatus]  MessageCount:%d, FinishedCount:%d, ErrorCount:%d ", atomic.LoadUint64(&w.MessageCount), atomic.LoadUint64(&w.FinishedCount), atomic.LoadUint64(&w.ErrorCount))
 	return result
+}
+
+func (w *Worker) ResetStats() {
+	atomic.StoreUint64(&w.MessageCount, 0)
+	atomic.StoreUint64(&w.FinishedCount, 0)
+	atomic.StoreUint64(&w.ErrorCount, 0)
 }
