@@ -40,12 +40,6 @@ var ErrOverMaxInFlight = errors.New("over configure max-inflight")
 // returned from ConnectToLookupd when given lookupd address exists already
 var ErrLookupdAddressExists = errors.New("lookupd address already exists")
 
-type AckMessage struct {
-	DeviceID  int64
-	MessageID int64
-	AckType   int32
-}
-
 type Worker struct {
 	sync.RWMutex
 	VerboseLogging bool // enable verbose logging
@@ -89,7 +83,7 @@ type Worker struct {
 	clientPubChan     chan *model.PubMessage
 	brokerPubChan     chan *model.PubMessage
 	clientOfflineChan chan *model.PubMessage
-	ackChan           chan *AckMessage
+	ackChan           chan *model.AckMessage
 	exitChan          chan int
 	waitGroup         WaitGroupWrapper
 	// notifyChan      chan interface{}
@@ -107,7 +101,7 @@ var ErrNotConnected = errors.New("not connected")
 var ErrStopped = errors.New("stopped")
 
 // NewWriter returns an instance of Writer for the specified address
-func NewWorker(options *workerOptions, brokerPubChan chan *model.PubMessage) *Worker {
+func NewWorker(options *workerOptions, b *broker.Broker) *Worker {
 	// hostname, err := os.Hostname()
 	// if err != nil {
 	// 	log.Fatalf("ERROR: unable to get hostname %s", err.Error())
@@ -131,16 +125,16 @@ func NewWorker(options *workerOptions, brokerPubChan chan *model.PubMessage) *Wo
 		incomingMsgChan:   make(chan *model.Message),
 		clientPubChan:     make(chan *model.PubMessage, 1024000),
 		clientOfflineChan: make(chan *model.PubMessage, 1024000),
-		ackChan:           make(chan *AckMessage, 1024000),
+		ackChan:           make(chan *model.AckMessage, 1024000),
 
 		pendingConnections: make(map[string]bool),
 		nsqConnections:     make(map[string]*nsqConn),
 
 		idChan: make(chan int64, 4096),
 
-		brokerPubChan: brokerPubChan,
+		brokerPubChan: b.PubChan,
 	}
-
+	b.WorkerAckChan = w.ackChan
 	w.waitGroup.Wrap(func() { w.idPump() })
 	// w.waitGroup.Wrap(func() { w.Publish() })
 
@@ -249,7 +243,7 @@ exit:
 	log.Debug("msg router exit!")
 }
 
-func (w *Worker) processAck(ack *AckMessage) {
+func (w *Worker) processAck(ack *model.AckMessage) {
 	log.Debug("process ack  %s", ack)
 	if ack.AckType != ACK_SUCCESS {
 		model.SaveOfflineMessage(ack.DeviceID, ack.MessageID)
@@ -263,9 +257,9 @@ func (w *Worker) processAck(ack *AckMessage) {
 
 func (w *Worker) sendMessage2Client(pub *model.PubMessage) (err error) {
 
-	log.Debug("send PubMessage to pubchan")
+	// log.Debug("send PubMessage to pubchan")
 	w.brokerPubChan <- pub
-	log.Debug("send PubMessage to pubchan finish")
+	// log.Debug("send PubMessage to pubchan finish")
 	// broker_addr, err := model.GetClientConn(pub.DeviceID)
 	// if err != nil {
 	// 	// log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", pub.DeviceID, err)
@@ -617,7 +611,7 @@ func (w *Worker) readLoop(c *nsqConn) {
 				log.Debug("ERROR: parse msgId error %s", err)
 				continue
 			}
-			w.ackChan <- &AckMessage{deviceId, msgId, int32(ackType)}
+			w.ackChan <- &model.AckMessage{deviceId, msgId, int32(ackType)}
 
 		case FrameTypeError:
 			log.Debug("[%s] error from nsqd %s", c, data)

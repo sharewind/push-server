@@ -605,13 +605,14 @@ func (b *Broker) router() {
 	log.Debug("router start ..............")
 	for {
 		select {
-		case pub := <-b.pubChan:
-			// log.Debug("process on pub %s", pub)
+		case pub := <-b.PubChan:
+			log.Debug("process on pub %s", pub)
 			destClient, err := b.GetClient(pub.DeviceID, "")
 			if err != nil || destClient == nil {
+				b.WorkerAckChan <- &model.AckMessage{pub.DeviceID, pub.Message.ID, int32(util.ACK_OFF)}
 				// ack := AckPublish(util.ACK_OFF, pub.DeviceID, pub.Message.ID)
 				// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
-				// log.Debug("error %s, client %d is null, params =%s", err, pub.clientID, pub)
+				log.Debug("error %s, client %d is null, params =%s", err, pub.DeviceID, pub)
 				continue
 			}
 
@@ -623,10 +624,11 @@ func (b *Broker) router() {
 				Timestamp: time.Now().UnixNano(),
 			}
 			destClient.clientMsgChan <- msg
+			b.WorkerAckChan <- &model.AckMessage{pub.DeviceID, pub.Message.ID, int32(util.ACK_SUCCESS)}
 			// ack := AckPublish(util.ACK_SUCCESS, pub.DeviceID, pub.Message.ID)
 			// log.Debug("put client msg in chan")
 			// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
-			// log.Debug("ack chan finished")
+			log.Debug("ack chan finished")
 		case <-b.exitChan:
 			goto exit
 

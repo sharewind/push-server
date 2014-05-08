@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	"code.sohuno.com/kzapp/push-server/broker"
-	"code.sohuno.com/kzapp/push-server/model"
+	// "code.sohuno.com/kzapp/push-server/model"
 	"code.sohuno.com/kzapp/push-server/util"
 	"code.sohuno.com/kzapp/push-server/worker"
 
@@ -74,8 +74,8 @@ func main() {
 			log.Fatalf("ERROR: failed to load config file %s - %s", *config, err.Error())
 		}
 	}
-	b, c := RunBroker(flagSet, cfg)
-	w := RunWorker(flagSet, cfg, c)
+	b := RunBroker(flagSet, cfg)
+	w := RunWorker(flagSet, cfg, b)
 
 	// log.Debug("worker id %d", opts.ID)
 
@@ -93,19 +93,19 @@ func main() {
 	// }
 }
 
-func RunBroker(flagSet *flag.FlagSet, cfg map[string]interface{}) (*broker.Broker, chan *model.PubMessage) {
+func RunBroker(flagSet *flag.FlagSet, cfg map[string]interface{}) *broker.Broker {
 	opts := broker.NewBrokerOptions()
 	options.Resolve(opts, flagSet, cfg)
 	log.Debug("broker options %#v", opts)
 
-	b, c := broker.NewBroker(opts)
+	b := broker.NewBroker(opts)
 
 	log.Info(util.Version("broker"))
 	b.Main()
-	return b, c
+	return b
 }
 
-func RunWorker(flagSet *flag.FlagSet, cfg map[string]interface{}, brokerPubChan chan *model.PubMessage) *worker.Worker {
+func RunWorker(flagSet *flag.FlagSet, cfg map[string]interface{}, broker *broker.Broker) *worker.Worker {
 	// runtime.GOMAXPROCS(runtime.NumCPU() * 8)
 	// flagSet.Parse(os.Args[1:])
 
@@ -129,7 +129,7 @@ func RunWorker(flagSet *flag.FlagSet, cfg map[string]interface{}, brokerPubChan 
 	options.Resolve(opts, flagSet, cfg)
 
 	log.Debug("worker options %#v", opts)
-	w := worker.NewWorker(opts, brokerPubChan)
+	w := worker.NewWorker(opts, broker)
 
 	w.Main()
 	log.Debug("opts.BrokerTcpAddress %s", opts.BrokerTcpAddress)

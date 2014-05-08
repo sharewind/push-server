@@ -45,13 +45,14 @@ type Broker struct {
 	httpListener net.Listener
 	tlsConfig    *tls.Config
 
-	exitChan  chan int
-	idChan    chan int64
-	pubChan   chan *model.PubMessage
-	waitGroup util.WaitGroupWrapper
+	exitChan      chan int
+	idChan        chan int64
+	PubChan       chan *model.PubMessage
+	WorkerAckChan chan *model.AckMessage
+	waitGroup     util.WaitGroupWrapper
 }
 
-func NewBroker(options *brokerOptions) (*Broker, chan *model.PubMessage) {
+func NewBroker(options *brokerOptions) *Broker {
 
 	var tlsConfig *tls.Config
 	if options.MaxDeflateLevel < 1 || options.MaxDeflateLevel > 9 {
@@ -87,12 +88,12 @@ func NewBroker(options *brokerOptions) (*Broker, chan *model.PubMessage) {
 		clients:  make(map[string]*client, DefaultClientMapSize), //default client map size
 		exitChan: make(chan int),
 		idChan:   make(chan int64, 4096),
-		pubChan:  make(chan *model.PubMessage, 1000000),
+		PubChan:  make(chan *model.PubMessage, 1000000),
 		// notifyChan: make(chan interface{}),
 		tlsConfig: tlsConfig,
 	}
 
-	return b, b.pubChan
+	return b
 }
 
 func (b *Broker) Main() {
