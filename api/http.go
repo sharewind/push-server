@@ -54,7 +54,9 @@ func init() {
 func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch req.URL.Path {
 	case "/registration":
+		// log.Notice("http req recv")
 		s.registerHandler(w, req)
+		// log.Notice("http response finish")
 	case "/ping":
 		s.pingHandler(w, req)
 	case "/info":
@@ -130,11 +132,18 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	// }
 
 	var device *model.Device = nil
+
+	// log.Notice("start connection mongo 1")
+
 	deviceID, err := model.FindDeviceIDBySerialNO(serial_no)
+
+	// log.Notice("over connection mongo 1")
 	// log.Info("FindDeviceIDBySerialNO %s result %d", serial_no, deviceID)
 
 	if err == nil && deviceID != 0 {
+		// log.Notice("start connection mongo 2")
 		device, err = model.FindDeviceByID(deviceID)
+		// log.Notice("over connection mongo 2")
 		// log.Info("FindDeviceByID %d result %#v", deviceID, device)
 		if err != nil || device == nil {
 			// log.Error("FindDeviceByID error %s", err)
@@ -144,7 +153,10 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// log.Info("exist_device %#v", device)
+
 	if device == nil {
+
+		// log.Notice("start new device")
 		device = &model.Device{
 			ID:              <-s.context.api.idChan,
 			SerialNO:        serial_no,
@@ -153,7 +165,11 @@ func (s *httpServer) registerHandler(w http.ResponseWriter, req *http.Request) {
 			CreatedAt:       time.Now().UnixNano(),
 			OnlineTimestamp: time.Now().UnixNano(),
 		}
+		// log.Notice("over new device\n")
+
+		// log.Notice("start connection mongo 3")
 		err = model.SaveDevice(device)
+		// log.Notice("over connection mongo 3")
 		if err != nil {
 			// log.Error("SaveDevice %s error %s", device, err)
 			util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)

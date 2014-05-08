@@ -8,7 +8,7 @@ import (
 	"io"
 	"math"
 	"net"
-	"strconv"
+	// "strconv"
 	// "strings"
 	"sync/atomic"
 	"time"
@@ -21,7 +21,8 @@ const maxTimeout = time.Hour
 
 var separatorBytes = []byte(" ")
 var heartbeatBytes = []byte("_heartbeat_")
-var okBytes = []byte("OK")
+var okBytes = []byte("IDENTIFY OK")
+var subOkBytes = []byte("SUB OK")
 
 type protocol struct {
 	context *context
@@ -50,6 +51,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		// ie. the returned slice is only valid until the next call to it
 		line, err = client.Reader.ReadBytes('\n')
 		if err != nil {
+			log.Error(err.Error())
 			break
 		}
 
@@ -71,7 +73,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 			if parentErr := err.(util.ChildErr).Parent(); parentErr != nil {
 				context = " - " + parentErr.Error()
 			}
-			log.Error("[%s] - %s%s", client, err.Error(), context)
+			log.Error("[%s] - %s %s", client, err.Error(), context)
 
 			sendErr := p.Send(client, util.FrameTypeError, []byte(err.Error()))
 			if sendErr != nil {
@@ -161,8 +163,8 @@ func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
 	switch {
 	case bytes.Equal(params[0], []byte("H")):
 		return p.HEARTBEAT(client, params)
-	case bytes.Equal(params[0], []byte("PUB")):
-		return p.PUB(client, params)
+	// case bytes.Equal(params[0], []byte("PUB")):
+	// 	return p.PUB(client, params)
 	case bytes.Equal(params[0], []byte("NOP")):
 		return p.NOP(client, params)
 	case bytes.Equal(params[0], []byte("IDENTIFY")):
@@ -381,7 +383,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	// update message pump
 	// client.SubEventChan <- channel
 
-	return okBytes, nil
+	return subOkBytes, nil
 }
 
 func (p *protocol) messagePump(client *client, startedChan chan bool) {
@@ -585,16 +587,16 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "PUB failed to read body")
 	}
 
-	client_id, _ := strconv.ParseInt(string(params[1]), 10, 64)
-	channel_id := string(params[2])
-	message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
-	atomic.AddUint64(&p.context.broker.MessageCount, 1)
+	// client_id, _ := strconv.ParseInt(string(params[1]), 10, 64)
+	// channel_id := string(params[2])
+	// message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
+	// atomic.AddUint64(&p.context.broker.MessageCount, 1)
 
-	p.context.broker.pubChan <- &PubMessage{clientID: client_id,
-		messageID: message_id,
-		channelID: channel_id,
-		pubClient: client,
-		body:      body}
+	// p.context.broker.pubChan <- &PubMessage{clientID: client_id,
+	// 	messageID: message_id,
+	// 	channelID: channel_id,
+	// 	pubClient: client,
+	// 	body:      body}
 	// log.Debug("receive params on sub  %s", params)
 	return nil, nil
 }
@@ -605,25 +607,25 @@ func (b *Broker) router() {
 		select {
 		case pub := <-b.pubChan:
 			// log.Debug("process on pub %s", pub)
-			destClient, err := b.GetClient(pub.clientID, "")
+			destClient, err := b.GetClient(pub.DeviceID, "")
 			if err != nil || destClient == nil {
-				ack := AckPublish(util.ACK_OFF, pub.clientID, pub.messageID)
-				pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
-				log.Debug("error %s, client %d is null, params =%s", err, pub.clientID, pub)
+				// ack := AckPublish(util.ACK_OFF, pub.DeviceID, pub.Message.ID)
+				// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
+				// log.Debug("error %s, client %d is null, params =%s", err, pub.clientID, pub)
 				continue
 			}
 
 			// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
 
 			msg := &Message{
-				Id:        util.Guid(pub.messageID).Hex(),
-				Body:      pub.body,
+				Id:        util.Guid(pub.Message.ID).Hex(),
+				Body:      []byte(pub.Message.Body),
 				Timestamp: time.Now().UnixNano(),
 			}
 			destClient.clientMsgChan <- msg
-			ack := AckPublish(util.ACK_SUCCESS, pub.clientID, pub.messageID)
+			// ack := AckPublish(util.ACK_SUCCESS, pub.DeviceID, pub.Message.ID)
 			// log.Debug("put client msg in chan")
-			pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
+			// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
 			// log.Debug("ack chan finished")
 		case <-b.exitChan:
 			goto exit

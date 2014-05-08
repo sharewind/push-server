@@ -40,11 +40,6 @@ var ErrOverMaxInFlight = errors.New("over configure max-inflight")
 // returned from ConnectToLookupd when given lookupd address exists already
 var ErrLookupdAddressExists = errors.New("lookupd address already exists")
 
-type PubMessage struct {
-	DeviceID int64
-	Message  *model.Message
-}
-
 type AckMessage struct {
 	DeviceID  int64
 	MessageID int64
@@ -91,8 +86,9 @@ type Worker struct {
 
 	idChan            chan int64
 	incomingMsgChan   chan *model.Message
-	clientPubChan     chan *PubMessage
-	clientOfflineChan chan *PubMessage
+	clientPubChan     chan *model.PubMessage
+	brokerPubChan     chan *model.PubMessage
+	clientOfflineChan chan *model.PubMessage
 	ackChan           chan *AckMessage
 	exitChan          chan int
 	waitGroup         WaitGroupWrapper
@@ -111,13 +107,13 @@ var ErrNotConnected = errors.New("not connected")
 var ErrStopped = errors.New("stopped")
 
 // NewWriter returns an instance of Writer for the specified address
-func NewWorker(options *workerOptions) *Worker {
+func NewWorker(options *workerOptions, brokerPubChan chan *model.PubMessage) *Worker {
 	// hostname, err := os.Hostname()
 	// if err != nil {
 	// 	log.Fatalf("ERROR: unable to get hostname %s", err.Error())
 	// }
 
-	httpAddr, err := net.ResolveTCPAddr("tcp", options.HTTPAddress)
+	httpAddr, err := net.ResolveTCPAddr("tcp", options.WorkerHTTPAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -133,14 +129,16 @@ func NewWorker(options *workerOptions) *Worker {
 		DeflateLevel: 6,
 
 		incomingMsgChan:   make(chan *model.Message),
-		clientPubChan:     make(chan *PubMessage, 1024000),
-		clientOfflineChan: make(chan *PubMessage, 1024000),
+		clientPubChan:     make(chan *model.PubMessage, 1024000),
+		clientOfflineChan: make(chan *model.PubMessage, 1024000),
 		ackChan:           make(chan *AckMessage, 1024000),
 
 		pendingConnections: make(map[string]bool),
 		nsqConnections:     make(map[string]*nsqConn),
 
 		idChan: make(chan int64, 4096),
+
+		brokerPubChan: brokerPubChan,
 	}
 
 	w.waitGroup.Wrap(func() { w.idPump() })
@@ -163,6 +161,7 @@ func (w *Worker) Main() {
 	w.httpListener = httpListener
 	httpServer := &httpServer{context: context}
 	w.waitGroup.Wrap(func() { HTTPServer(w.httpListener, httpServer) })
+	log.Debug("listen %s", w.httpAddr.String())
 }
 
 // PutMessage writes to the appropriate incoming message channel
@@ -214,7 +213,7 @@ func (w *Worker) pushMessage(message *model.Message) {
 
 		for _, sub := range subs {
 			atomic.AddUint64(&w.MessageCount, 1)
-			w.clientPubChan <- &PubMessage{DeviceID: sub.DeviceID, Message: message}
+			w.clientPubChan <- &model.PubMessage{DeviceID: sub.DeviceID, Message: message}
 			lastID = sub.ID
 		}
 		log.Debug("get subs page %d  count %d  lastID %d finished!", i, len(subs), lastID)
@@ -223,7 +222,7 @@ func (w *Worker) pushMessage(message *model.Message) {
 }
 
 func (w *Worker) router() {
-	log.Debug("router start ...........")
+	// log.Debug("router start ...........")
 	for {
 		select {
 		case message := <-w.incomingMsgChan:
@@ -262,26 +261,29 @@ func (w *Worker) processAck(ack *AckMessage) {
 	}
 }
 
-func (w *Worker) sendMessage2Client(pub *PubMessage) (err error) {
+func (w *Worker) sendMessage2Client(pub *model.PubMessage) (err error) {
 
-	broker_addr, err := model.GetClientConn(pub.DeviceID)
-	if err != nil {
-		// log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", pub.DeviceID, err)
-		return errors.New("client offline")
-	}
-	// log.Debug("GetClientConn by redis  [%d]   %s ", pub.DeviceID, broker_addr)
+	log.Debug("send PubMessage to pubchan")
+	w.brokerPubChan <- pub
+	log.Debug("send PubMessage to pubchan finish")
+	// broker_addr, err := model.GetClientConn(pub.DeviceID)
+	// if err != nil {
+	// 	// log.Debug("ERROR: GetClientConn by redis  [%d]  err %s ", pub.DeviceID, err)
+	// 	return errors.New("client offline")
+	// }
+	// // log.Debug("GetClientConn by redis  [%d]   %s ", pub.DeviceID, broker_addr)
 
-	conn, ok := w.GetBroker(broker_addr)
-	// log.Debug(" publish conn %s is %s", broker_addr, conn)
-	if !ok {
-		log.Debug("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
-		return errors.New("client offline")
-	}
+	// conn, ok := w.GetBroker(broker_addr)
+	// // log.Debug(" publish conn %s is %s", broker_addr, conn)
+	// if !ok {
+	// 	log.Debug("ERROR: Get nsqConnections  [%s]  err %s ", broker_addr, err)
+	// 	return errors.New("client offline")
+	// }
 
-	message := pub.Message
-	cmd := client.Publish(pub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
-	conn.cmdChan <- cmd
-	// log.Debug("send message success: channel_id %s, device_id %d,  body %s", message.ChannelID, pub.DeviceID, message.Body)
+	// message := pub.Message
+	// cmd := client.Publish(pub.DeviceID, message.ChannelID, message.ID, []byte(message.Body))
+	// conn.cmdChan <- cmd
+	// // log.Debug("send message success: channel_id %s, device_id %d,  body %s", message.ChannelID, pub.DeviceID, message.Body)
 	return nil
 }
 

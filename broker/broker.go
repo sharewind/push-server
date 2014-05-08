@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"code.sohuno.com/kzapp/push-server/model"
 	"code.sohuno.com/kzapp/push-server/util"
 	"crypto/tls"
 	"errors"
@@ -18,13 +19,13 @@ const DefaultClientMapSize = 1000000
 
 var log = logging.MustGetLogger("broker")
 
-type PubMessage struct {
-	clientID  int64
-	messageID int64
-	channelID string
-	body      []byte
-	pubClient *client //TODO should be a finishedChan
-}
+// type PubMessage struct {
+// 	clientID  int64
+// 	messageID int64
+// 	channelID string
+// 	body      []byte
+// 	pubClient *client //TODO should be a finishedChan
+// }
 
 type Broker struct {
 	sync.RWMutex
@@ -46,11 +47,11 @@ type Broker struct {
 
 	exitChan  chan int
 	idChan    chan int64
-	pubChan   chan *PubMessage
+	pubChan   chan *model.PubMessage
 	waitGroup util.WaitGroupWrapper
 }
 
-func NewBroker(options *brokerOptions) *Broker {
+func NewBroker(options *brokerOptions) (*Broker, chan *model.PubMessage) {
 
 	var tlsConfig *tls.Config
 	if options.MaxDeflateLevel < 1 || options.MaxDeflateLevel > 9 {
@@ -62,7 +63,7 @@ func NewBroker(options *brokerOptions) *Broker {
 		log.Fatal(err)
 	}
 
-	httpAddr, err := net.ResolveTCPAddr("tcp", options.HTTPAddress)
+	httpAddr, err := net.ResolveTCPAddr("tcp", options.BrokerHTTPAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,12 +87,12 @@ func NewBroker(options *brokerOptions) *Broker {
 		clients:  make(map[string]*client, DefaultClientMapSize), //default client map size
 		exitChan: make(chan int),
 		idChan:   make(chan int64, 4096),
-		pubChan:  make(chan *PubMessage, 1000000),
+		pubChan:  make(chan *model.PubMessage, 1000000),
 		// notifyChan: make(chan interface{}),
 		tlsConfig: tlsConfig,
 	}
 
-	return b
+	return b, b.pubChan
 }
 
 func (b *Broker) Main() {

@@ -82,8 +82,11 @@ func (p *PushAPI) idPump() {
 	factory := &util.GuidFactory{}
 	lastError := time.Now()
 	for {
+		log.Notice("start for")
 		id, err := factory.NewGUID(p.IDSeq)
+		log.Notice("get id from factory finish")
 		if err != nil {
+			log.Error("id pump err %s", err.Error())
 			now := time.Now()
 			if now.Sub(lastError) > time.Second {
 				// only print the error once/second
@@ -93,11 +96,14 @@ func (p *PushAPI) idPump() {
 			runtime.Gosched()
 			continue
 		}
+		log.Notice("write to channel start")
 		select {
 		case p.idChan <- id:
 		case <-p.exitChan:
 			goto exit
 		}
+		log.Notice("write to channel finish")
+		log.Notice("end for \n")
 	}
 
 exit:
