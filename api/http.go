@@ -83,7 +83,9 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (s *httpServer) pingHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Length", "2")
+
 	io.WriteString(w, "OK")
+	req.Body.Close()
 }
 
 func (s *httpServer) infoHandler(w http.ResponseWriter, req *http.Request) {

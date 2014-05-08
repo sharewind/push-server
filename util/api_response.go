@@ -23,6 +23,7 @@ func ApiResponse(w http.ResponseWriter, statusCode int, errorCode int, errorMsg 
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(len(response)))
+	w.Header().Set("Connection", "close")
 	w.WriteHeader(statusCode)
 
 	w.Write(response)

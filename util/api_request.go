@@ -56,6 +56,7 @@ func ApiRequest(endpoint string) (*simplejson.Json, error) {
 		return nil, err
 	}
 
+	req.Header.Set("Connection", "close")
 	resp, err := httpclient.Do(req)
 	if err != nil {
 		return nil, err
@@ -95,6 +96,7 @@ func ApiPostRequest(endpoint string) (*simplejson.Json, error) {
 		return nil, err
 	}
 
+	req.Header.Set("Connection", "close")
 	resp, err := httpclient.Do(req)
 	if err != nil {
 		log.Error(err.Error())
