@@ -103,6 +103,8 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 
 func (p *protocol) cleanupClientConn(client *client) {
 
+	p.context.broker.RemoveClient(client.ClientID) //, client.SubChannel)
+
 	client.stopper.Do(func() {
 		atomic.StoreInt32(&client.stopFlag, 1)
 
@@ -110,7 +112,6 @@ func (p *protocol) cleanupClientConn(client *client) {
 		model.DelClientConn(client.ClientID)
 
 		// if client.SubChannel != "" {
-		p.context.broker.RemoveClient(client.ClientID) //, client.SubChannel)
 		// }
 		// touch devie online
 		model.TouchDeviceOffline(client.ClientID)
