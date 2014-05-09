@@ -109,9 +109,9 @@ func (p *protocol) cleanupClientConn(client *client) {
 		client.Close()
 		model.DelClientConn(client.ClientID)
 
-		if client.SubChannel != "" {
-			p.context.broker.RemoveClient(client.ClientID, client.SubChannel)
-		}
+		// if client.SubChannel != "" {
+		p.context.broker.RemoveClient(client.ClientID) //, client.SubChannel)
+		// }
 		// touch devie online
 		model.TouchDeviceOffline(client.ClientID)
 		close(client.ExitChan)
@@ -266,7 +266,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_IDENTIFY_FAILED", "set client conn error")
 	}
 
-	// p.context.broker.AddClient(client.ClientID, client.SubChannel, client)
+	p.context.broker.AddClient(client.ClientID, client)
 	log.Info("clientId %d conn success ", client.ClientID)
 
 	err = p.Send(client, util.FrameTypeResponse, resp)
@@ -313,6 +313,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 		}
 	}
 
+	go p.checkOfflineMessage(client)
 	return nil, nil
 }
 
@@ -363,7 +364,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	log.Info("clientId %d save sub channel %s ", client.ClientID, channel_id)
 
-	p.context.broker.AddClient(client.ClientID, channel_id, client)
+	// p.context.broker.AddClient(client.ClientID, channel_id, client)
 	// log.Info("clientId %d sub channel %d success ", client.ClientID, channel_id)
 
 	// touch devie online
@@ -372,14 +373,9 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	// increase channel sub count
 	// add client to channel sub list
 
-	// topic := p.context.broker.GetTopic(topicName)
-	// channel := topic.GetChannel(channelName)
-	// channel.AddClient(client.ID, client)
-
 	atomic.StoreInt32(&client.State, StateSubscribed)
 	client.SubChannel = channel_id
 
-	go p.checkOfflineMessage(client)
 	// client.Channel = channel
 	// update message pump
 	// client.SubEventChan <- channel
@@ -394,7 +390,9 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 	// the pathological case of a channel on a low volume topic
 	// with >1 clients having >1 RDY counts
 	var flusherChan <-chan time.Time
-	outputBufferTicker := time.NewTicker(client.OutputBufferTimeout)
+
+	outputBufferTimeout := 250 * time.Millisecond
+	outputBufferTicker := time.NewTicker(outputBufferTimeout)
 
 	// v2 opportunistically buffers data to clients to reduce write system calls
 	// we force flush in two cases:
@@ -409,7 +407,7 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 	close(startedChan)
 
 	for {
-		log.Notice("enter forloop")
+		// log.Notice("enter forloop")
 		if atomic.LoadInt32(&client.stopFlag) == 1 {
 			// the client is not ready to receive messages...
 			flusherChan = nil
@@ -423,10 +421,10 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 			// select on the flusher ticker channel, too
 			flusherChan = outputBufferTicker.C
 		}
-		log.Notice("before select")
+		// log.Notice("before select")
 		select {
 		case <-flusherChan:
-			log.Notice("enter flusherChan")
+			// log.Notice("enter flusherChan")
 			// if this case wins, we're either starved
 			// or we won the race between other channels...
 			// in either case, force flush
@@ -437,70 +435,29 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 				goto exit
 			}
 			flushed = true
-			log.Notice("leave flusherChan")
+			// log.Notice("leave flusherChan")
 		case msg, ok := <-client.clientMsgChan:
-			log.Notice("get client message %s", msg.Id)
+			// log.Notice("get client message %s", msg.Id)
 			if !ok {
 				goto exit
 			}
 
 			// client.SendingMessage()
-			log.Notice("before send message %s", msg.Id)
+			// log.Notice("before send message %s", msg.Id)
 			err = p.SendMessage(client, msg, &buf)
-			log.Notice("after send message %s", msg.Id)
+			// log.Notice("after send message %s", msg.Id)
 			if err != nil {
 				atomic.AddUint64(&p.context.broker.ErrorCount, 1)
 				goto exit
 			}
 			atomic.AddUint64(&p.context.broker.FinishedCount, 1)
 			flushed = false
-			log.Notice("send message finish %s \n", msg.Id)
-
-		case resp, ok := <-client.responseChan:
-			log.Notice("enter responseChan")
-			// log.Debug("log response chan %s", resp)
-			if !ok {
-				// log.Debug("not ok log response chan %s", resp)
-				goto exit
-			}
-
-			response, err := resp.response, resp.err
-			if err != nil {
-				// log.Debug("not3 ok log response chan %s", resp)
-				context := ""
-				if parentErr := err.(util.ChildErr).Parent(); parentErr != nil {
-					context = " - " + parentErr.Error()
-				}
-				log.Error("[%s] - %s%s", client, err.Error(), context)
-
-				sendErr := p.Send(client, util.FrameTypeError, []byte(err.Error()))
-				if sendErr != nil {
-					goto exit
-				}
-
-				// errors of type FatalClientErr should forceably close the connection
-				if _, ok := err.(*util.FatalClientErr); ok {
-					goto exit
-				}
-				continue
-			}
-
-			if response != nil {
-				// log.Debug("not4 ok log response chan %s", resp)
-				err = p.Send(client, util.FrameTypeResponse, response)
-				if err != nil {
-					log.Error("send response to client error %s ", err)
-					// log.Debug("not5 ok log response chan %s", resp)
-					goto exit
-				}
-			}
-			// log.Debug("send ack sueccss ..... finished ")
-			log.Notice("leave responseChan")
+			// log.Notice("send message finish %s \n", msg.Id)
 		case <-client.ExitChan:
 			goto exit
 		}
-		log.Notice("after select")
-		log.Notice("leave fooloop")
+		// log.Notice("after select")
+		// log.Notice("leave fooloop")
 	}
 
 exit:
@@ -518,11 +475,13 @@ func (p *protocol) checkOfflineMessage(client *client) {
 		log.Error("GetOfflineMessages clientID %d error %d ", client.ClientID, err)
 		return
 	}
+
+	// log.Error("GetOfflineMessages clientID %d msgIDs %s", client.ClientID, messageIDs)
 	if messageIDs == nil {
 		return
 	}
 
-	subChannel := client.SubChannel
+	// subChannel := client.SubChannel
 	for _, messageID := range messageIDs {
 		message, err := model.FindMessageByID(messageID)
 		if err != nil || message == nil {
@@ -537,15 +496,17 @@ func (p *protocol) checkOfflineMessage(client *client) {
 		// 	continue
 		// }
 
-		if subChannel != message.ChannelID {
-			continue
-		}
+		// if subChannel != message.ChannelID {
+		// 	continue
+		// }
 
 		msg := &Message{
 			Id:        util.Guid(message.ID).Hex(),
 			Body:      []byte(message.Body),
 			Timestamp: message.CreatedAt,
 		}
+		log.Debug("output_offline_msg %d", client.ClientID)
+
 		client.clientMsgChan <- msg
 		model.RemoveOfflineMessage(client.ClientID, messageID)
 	}
@@ -609,51 +570,6 @@ func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
 	// 	body:      body}
 	// log.Debug("receive params on sub  %s", params)
 	return nil, nil
-}
-
-func (b *Broker) router() {
-	log.Debug("router start ..............")
-	for {
-		select {
-		case pub := <-b.PubChan:
-			log.Debug("process on pub %s", pub)
-			destClient, err := b.GetClient(pub.DeviceID, pub.Message.ChannelID)
-			log.Notice("get client finish %s", pub.DeviceID)
-			if err != nil || destClient == nil {
-				log.Notice("send ack 1 %s", pub.DeviceID)
-				b.WorkerAckChan <- &model.AckMessage{pub.DeviceID, pub.Message.ID, int32(util.ACK_OFF)}
-				log.Notice("send ack 1 finish %s", pub.DeviceID)
-				// ack := AckPublish(util.ACK_OFF, pub.DeviceID, pub.Message.ID)
-				// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
-				log.Debug("error %s, client %d is null, params =%s", err, pub.DeviceID, pub)
-				continue
-			}
-
-			// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
-			log.Notice("new message  %s", pub.DeviceID)
-			msg := &Message{
-				Id:        util.Guid(pub.Message.ID).Hex(),
-				Body:      []byte(pub.Message.Body),
-				Timestamp: time.Now().UnixNano(),
-			}
-			log.Notice("new message finish %s", pub.DeviceID)
-			destClient.clientMsgChan <- msg
-			log.Notice("send client msg finish %s", pub.DeviceID)
-			log.Notice("send ack 2")
-			b.WorkerAckChan <- &model.AckMessage{pub.DeviceID, pub.Message.ID, int32(util.ACK_SUCCESS)}
-			log.Notice("send ack 2 finish %s", pub.DeviceID)
-			// ack := AckPublish(util.ACK_SUCCESS, pub.DeviceID, pub.Message.ID)
-			// log.Debug("put client msg in chan")
-			// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
-			log.Debug("ack chan finished %s \n", pub.DeviceID)
-		case <-b.exitChan:
-			goto exit
-
-		}
-	}
-exit:
-	log.Debug("broker exit router")
-
 }
 
 func AckPublish(ackType int32, clientID int64, msgID int64) []byte {
