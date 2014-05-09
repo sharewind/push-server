@@ -170,36 +170,40 @@ exit:
 
 // AddClient adds a client to the Channel's client list
 func (b *Broker) AddClient(clientID int64, channelID string, client *client) {
+	log.Notice("add client lock")
 	b.Lock()
 	defer b.Unlock()
 
-	key := fmt.Sprintf("%d_%d", clientID, channelID)
-	// log.Debug("put client[%s] = %s", key, client)
+	key := fmt.Sprintf("%d_%s", clientID, channelID)
 	_, ok := b.clients[key]
 	if ok {
+		log.Notice("client exist and return [%s] = %s", key, client)
 		return
 	}
 	b.clients[key] = client
+	log.Notice("put client[%s] = %s", key, client)
 }
 
 // RemoveClient removes a client from the Channel's client list
 func (b *Broker) RemoveClient(clientID int64, channelID string) {
+	log.Notice("rm client lock")
 	b.Lock()
 	defer b.Unlock()
-
-	key := fmt.Sprintf("%d_%d", clientID, channelID)
+	key := fmt.Sprintf("%d_%s", clientID, channelID)
 	_, ok := b.clients[key]
 	if !ok {
+		log.Notice("client not exist and return [%s]", key)
 		return
 	}
 	delete(b.clients, key)
+	log.Notice("remove client[%s] = %s", key)
 }
 
 func (b *Broker) GetClient(clientID int64, channelID string) (client *client, err error) {
 	b.RLock()
 	defer b.RUnlock()
-	key := fmt.Sprintf("%d_%d", clientID, channelID)
-	// log.Debug("get client[%s] ", key)
+	key := fmt.Sprintf("%d_%s", clientID, channelID)
+	log.Notice("get client[%s] ", key)
 
 	client, ok := b.clients[key]
 	if !ok {

@@ -196,6 +196,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 
 	body := make([]byte, bodyLen)
 	_, err = io.ReadFull(client.Reader, body)
+	log.Notice("identify body %s", string(body))
 	if err != nil {
 		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body")
 	}
@@ -265,7 +266,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_IDENTIFY_FAILED", "set client conn error")
 	}
 
-	p.context.broker.AddClient(client.ClientID, "", client)
+	// p.context.broker.AddClient(client.ClientID, client.SubChannel, client)
 	log.Info("clientId %d conn success ", client.ClientID)
 
 	err = p.Send(client, util.FrameTypeResponse, resp)
@@ -362,7 +363,7 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	}
 	log.Info("clientId %d save sub channel %s ", client.ClientID, channel_id)
 
-	// p.context.broker.AddClient(client.ClientID, channel_id, client)
+	p.context.broker.AddClient(client.ClientID, channel_id, client)
 	// log.Info("clientId %d sub channel %d success ", client.ClientID, channel_id)
 
 	// touch devie online
@@ -408,6 +409,7 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 	close(startedChan)
 
 	for {
+		log.Notice("enter forloop")
 		if atomic.LoadInt32(&client.stopFlag) == 1 {
 			// the client is not ready to receive messages...
 			flusherChan = nil
@@ -421,9 +423,10 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 			// select on the flusher ticker channel, too
 			flusherChan = outputBufferTicker.C
 		}
-
+		log.Notice("before select")
 		select {
 		case <-flusherChan:
+			log.Notice("enter flusherChan")
 			// if this case wins, we're either starved
 			// or we won the race between other channels...
 			// in either case, force flush
@@ -434,22 +437,27 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 				goto exit
 			}
 			flushed = true
+			log.Notice("leave flusherChan")
 		case msg, ok := <-client.clientMsgChan:
-			// log.Debug("send client message")
+			log.Notice("get client message %s", msg.Id)
 			if !ok {
 				goto exit
 			}
 
 			// client.SendingMessage()
+			log.Notice("before send message %s", msg.Id)
 			err = p.SendMessage(client, msg, &buf)
+			log.Notice("after send message %s", msg.Id)
 			if err != nil {
 				atomic.AddUint64(&p.context.broker.ErrorCount, 1)
 				goto exit
 			}
 			atomic.AddUint64(&p.context.broker.FinishedCount, 1)
 			flushed = false
+			log.Notice("send message finish %s \n", msg.Id)
 
 		case resp, ok := <-client.responseChan:
+			log.Notice("enter responseChan")
 			// log.Debug("log response chan %s", resp)
 			if !ok {
 				// log.Debug("not ok log response chan %s", resp)
@@ -487,14 +495,16 @@ func (p *protocol) messagePump(client *client, startedChan chan bool) {
 				}
 			}
 			// log.Debug("send ack sueccss ..... finished ")
-
+			log.Notice("leave responseChan")
 		case <-client.ExitChan:
 			goto exit
 		}
+		log.Notice("after select")
+		log.Notice("leave fooloop")
 	}
 
 exit:
-	log.Debug("PROTOCOL: [%s] exiting messagePump", client)
+	log.Notice("PROTOCOL: [%s] exiting messagePump", client)
 	outputBufferTicker.Stop()
 	if err != nil {
 		log.Error("PROTOCOL: [%s] messagePump error - %s", client, err.Error())
@@ -607,9 +617,12 @@ func (b *Broker) router() {
 		select {
 		case pub := <-b.PubChan:
 			log.Debug("process on pub %s", pub)
-			destClient, err := b.GetClient(pub.DeviceID, "")
+			destClient, err := b.GetClient(pub.DeviceID, pub.Message.ChannelID)
+			log.Notice("get client finish %s", pub.DeviceID)
 			if err != nil || destClient == nil {
+				log.Notice("send ack 1 %s", pub.DeviceID)
 				b.WorkerAckChan <- &model.AckMessage{pub.DeviceID, pub.Message.ID, int32(util.ACK_OFF)}
+				log.Notice("send ack 1 finish %s", pub.DeviceID)
 				// ack := AckPublish(util.ACK_OFF, pub.DeviceID, pub.Message.ID)
 				// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
 				log.Debug("error %s, client %d is null, params =%s", err, pub.DeviceID, pub)
@@ -617,18 +630,22 @@ func (b *Broker) router() {
 			}
 
 			// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
-
+			log.Notice("new message  %s", pub.DeviceID)
 			msg := &Message{
 				Id:        util.Guid(pub.Message.ID).Hex(),
 				Body:      []byte(pub.Message.Body),
 				Timestamp: time.Now().UnixNano(),
 			}
+			log.Notice("new message finish %s", pub.DeviceID)
 			destClient.clientMsgChan <- msg
+			log.Notice("send client msg finish %s", pub.DeviceID)
+			log.Notice("send ack 2")
 			b.WorkerAckChan <- &model.AckMessage{pub.DeviceID, pub.Message.ID, int32(util.ACK_SUCCESS)}
+			log.Notice("send ack 2 finish %s", pub.DeviceID)
 			// ack := AckPublish(util.ACK_SUCCESS, pub.DeviceID, pub.Message.ID)
 			// log.Debug("put client msg in chan")
 			// pub.pubClient.responseChan <- &ClientResponse{ack, nil, util.FrameTypeAck}
-			log.Debug("ack chan finished")
+			log.Debug("ack chan finished %s \n", pub.DeviceID)
 		case <-b.exitChan:
 			goto exit
 
