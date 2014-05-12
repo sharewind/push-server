@@ -21,7 +21,7 @@ const maxTimeout = time.Hour
 
 var separatorBytes = []byte(" ")
 var heartbeatBytes = []byte("_heartbeat_")
-var okBytes = []byte("IDENTIFY OK")
+var identifyOKBytes = []byte("IDENTIFY OK")
 var subOkBytes = []byte("SUB OK")
 
 type protocol struct {
@@ -61,6 +61,8 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
+		// log.Debug("protocol receive line <%s>", line)
+
 		params := bytes.Split(line, separatorBytes)
 
 		if p.context.broker.options.Verbose {
@@ -175,6 +177,8 @@ func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
 	case bytes.Equal(params[0], []byte("CLS")):
 		return p.CLS(client, params)
 	}
+
+	log.Error("parse cmd (%s) error, line %s ", params[0], params)
 	return nil, util.NewFatalClientErr(nil, "E_INVALID", fmt.Sprintf("invalid command %s", params[0]))
 }
 
@@ -218,9 +222,20 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY "+err.Error())
 	}
 
+	// should send client connected eventsf
+	log.Info("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
+	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
+	if err != nil {
+		log.Error("setClientConn" + err.Error())
+		return nil, util.NewFatalClientErr(nil, "E_IDENTIFY_FAILED", "set client conn error")
+	}
+
+	p.context.broker.AddClient(client.ClientID, client)
+	log.Debug("clientId %d conn success ", client.ClientID)
+
 	// bail out early if we're not negotiating features
 	if !identifyData.FeatureNegotiation {
-		return okBytes, nil
+		return identifyOKBytes, nil
 	}
 
 	tlsv1 := p.context.broker.tlsConfig != nil && identifyData.TLSv1
@@ -259,17 +274,6 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 	}
 
-	// should send client connected eventsf
-	log.Info("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
-	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
-	if err != nil {
-		log.Error("setClientConn" + err.Error())
-		return nil, util.NewFatalClientErr(nil, "E_IDENTIFY_FAILED", "set client conn error")
-	}
-
-	p.context.broker.AddClient(client.ClientID, client)
-	log.Info("clientId %d conn success ", client.ClientID)
-
 	err = p.Send(client, util.FrameTypeResponse, resp)
 	if err != nil {
 		return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
@@ -282,7 +286,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 		}
 
-		err = p.Send(client, util.FrameTypeResponse, okBytes)
+		err = p.Send(client, util.FrameTypeResponse, identifyOKBytes)
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 		}
@@ -295,7 +299,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 		}
 
-		err = p.Send(client, util.FrameTypeResponse, okBytes)
+		err = p.Send(client, util.FrameTypeResponse, identifyOKBytes)
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 		}
@@ -308,7 +312,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 		}
 
-		err = p.Send(client, util.FrameTypeResponse, okBytes)
+		err = p.Send(client, util.FrameTypeResponse, identifyOKBytes)
 		if err != nil {
 			return nil, util.NewFatalClientErr(err, "E_IDENTIFY_FAILED", "IDENTIFY failed "+err.Error())
 		}

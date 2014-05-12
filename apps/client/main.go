@@ -15,6 +15,7 @@ var (
 	flagSet        = flag.NewFlagSet("client", flag.ExitOnError)
 	apiHttpAddress = flagSet.String("api-http-address", "0.0.0.0:8501", "<addr>:<port> to listen on for HTTP clients")
 	subChannel     = flagSet.String("sub-channel", "11111", "client sub channel id")
+	serialNo       = flagSet.String("serial-no", "11111", "client serial NO")
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 	fmt.Println("client start!")
 
 	c := client.NewClient()
-	c.AutoPump(*apiHttpAddress, *subChannel)
+	c.AutoPump(*apiHttpAddress, *subChannel, *serialNo)
 
 	exitChan := make(chan int)
 	signalChan := make(chan os.Signal, 1)

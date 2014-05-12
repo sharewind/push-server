@@ -82,7 +82,7 @@ func (c *Client) Stop() {
 	c.wg.Wait()
 }
 
-func (c *Client) AutoPump(addr string, subChannelID string) {
+func (c *Client) AutoPump(addr string, subChannelID string, serial_no string) {
 	c.SubChannel = subChannelID
 
 	go func() {
@@ -91,7 +91,7 @@ func (c *Client) AutoPump(addr string, subChannelID string) {
 				break
 			}
 
-			err := c.Register(addr)
+			err := c.Register(addr, serial_no)
 			if err == nil {
 				log.Info("<%s> regiester to %s success ", c, addr)
 				break
@@ -107,8 +107,8 @@ func (c *Client) AutoPump(addr string, subChannelID string) {
 	}()
 }
 
-func (c *Client) Register(addr string) error {
-	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%d&device_type=3&device_name=搜狐Android测试机%d", addr, time.Now().UnixNano(), time.Now().Unix())
+func (c *Client) Register(addr string, serial_no string) error {
+	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%s&device_type=3&device_name=搜狐Android测试机%d", addr, serial_no, time.Now().Unix())
 	log.Debug("LOOKUPD: querying %s", endpoint)
 
 	data, err := ApiPostRequest(endpoint)
@@ -178,7 +178,7 @@ func (c *Client) Connect() error {
 	}
 
 	ci := make(map[string]interface{})
-	ci["client_id"] = fmt.Sprintf("%d", c.ID)
+	ci["client_id"] = c.ID
 	ci["heartbeat_interval"] = int64(c.HeartbeatInterval / time.Millisecond)
 	ci["feature_negotiation"] = true
 	ci["role"] = "client"

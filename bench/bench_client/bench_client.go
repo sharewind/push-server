@@ -51,6 +51,6 @@ func main() {
 
 func createClient(clientChan chan *client.Client) {
 	c := client.NewClient()
-	c.AutoPump(*apiHttpAddress, *subChannel)
+	c.AutoPump(*apiHttpAddress, *subChannel, "")
 	clientChan <- c
 }

@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mreiferson/go-snappystream"
-	// "github.com/op/go-logging"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,7 +16,7 @@ import (
 const DefaultBufferSize = 512
 
 type identifyDataV2 struct {
-	ClientID            string `json:"client_id"`
+	ClientID            int64  `json:"client_id"`
 	Role                string `json:"role"`
 	Hostname            string `json:"hostname"`
 	HeartbeatInterval   int    `json:"heartbeat_interval"`
@@ -133,10 +131,9 @@ func (c *client) String() string {
 
 func (c *client) Identify(data identifyDataV2) error {
 	hostname := data.Hostname
-	clientId := data.ClientID
 
 	c.Lock()
-	c.ClientID, _ = strconv.ParseInt(clientId, 10, 64)
+	c.ClientID = data.ClientID
 	c.Hostname = hostname
 	c.UserAgent = data.UserAgent
 	c.Role = data.Role
