@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"labix.org/v2/mgo"
-	"sync"
+	"os"
 	"time"
+	// "sync"
 
 	"code.sohuno.com/kzapp/push-server/util"
 )
@@ -13,20 +14,25 @@ import (
 var (
 	mgoSession *mgo.Session
 	// databaseServer = "mongodb://192.168.230.52:27017,192.168.230.53:27017,192.168.230.54:27017?connect=replicaSet"
-	databaseServer = "mongodb://10.10.69.191:27017,10.10.69.191:27018?connect=replicaSet"
+	// databaseServer = "mongodb://10.10.69.191:27017,10.10.69.191:27018?connect=replicaSet"
 	// databaseServer = "mongodb://10.2.58.178:27017"
 	// databaseServer = "mongodb://localhost:27017"
-	databaseName = "push"
-	mux          sync.Mutex
-	pool         *util.Semaphore
+	databaseServer string
+	databaseName   = "push"
+	// mux          sync.Mutex
+	pool *util.Semaphore
 )
 
 func init() {
-	mux.Lock()
-	defer mux.Unlock()
+	// mux.Lock()
+	// defer mux.Unlock()
+	databaseServer = os.Getenv("MONGO_URL")
+	if databaseServer == "" {
+		databaseServer = "mongodb://10.10.69.191:27017,10.10.69.191:27018?connect=replicaSet"
+	}
+	log.Debug("mongo url=%s", databaseServer)
 
 	pool = util.NewSemaphore(10)
-
 	initIndex()
 }
 

@@ -4,18 +4,26 @@ import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"github.com/op/go-logging"
+	"os"
 	"time"
 )
 
 var (
 	log         = logging.MustGetLogger("model")
 	redisPool   *redis.Pool
-	redisServer string = "10.10.79.123:15151" // host:port of server
+	redisServer string // "10.10.79.123:15151" // host:port of server
 	// redisServer string = "localhost:6379" // host:port of server
 	password string
 )
 
 func init() {
+
+	redisServer = os.Getenv("REDIS_SERVER")
+	if redisServer == "" {
+		redisServer = "10.10.79.123:15151"
+	}
+	log.Debug("redis server=%s", redisServer)
+
 	redisPool = &redis.Pool{
 		MaxIdle:     3,
 		MaxActive:   160,
