@@ -165,7 +165,8 @@ curl -X POST /registration?serial_no=SOHUNO20140401XX&device_type=3&device_name=
 ##### 3.2 业务逻辑发消息
 业务线推送消息给client  
 URL: /put  
-Host:10.10.79.134:8710
+Host:10.10.79.134:8601
+Host:192.168.105.136:8601(Product)
 Method: POST   
 Parmas:
 
@@ -177,10 +178,12 @@ Body: 推送消息的内容
 
 成功
 <code>
+http status 200
 {"code":0,"msg":"OK","data":null}
 </code>
 
 错误  
+http status 400
 <pre>
 	NotFound      = -1
 	OK            = 0
