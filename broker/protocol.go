@@ -233,6 +233,8 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	p.context.broker.AddClient(client.ClientID, client)
 	log.Debug("clientId %d conn success ", client.ClientID)
 
+	go p.checkOfflineMessage(client)
+
 	// bail out early if we're not negotiating features
 	if !identifyData.FeatureNegotiation {
 		return identifyOKBytes, nil
@@ -319,7 +321,6 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	}
 
 	log.Debug("PROTOCOL: [%s] identify finish!", client)
-	go p.checkOfflineMessage(client)
 	return nil, nil
 }
 
@@ -513,7 +514,7 @@ func (p *protocol) checkOfflineMessage(client *client) {
 			Body:      []byte(message.Body),
 			Timestamp: message.CreatedAt,
 		}
-		log.Debug("output_offline_msg %d", client.ClientID)
+		// log.Debug("output_offline_msg %d", client.ClientID)
 
 		client.clientMsgChan <- msg
 		model.RemoveOfflineMessage(client.ClientID, messageID)
