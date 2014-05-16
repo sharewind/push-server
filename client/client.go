@@ -158,7 +158,7 @@ func (c *Client) Connect() error {
 		return ErrNotConnected
 	}
 
-	log.Debug("[%s] connecting...", c)
+	log.Debug("[%s] connecting to %s .....", c, c.brokerAddr)
 	conn, err := net.DialTimeout("tcp", c.brokerAddr, time.Second*5)
 	if err != nil {
 		log.Error("[%s] failed to dial %s - %s", c, c.brokerAddr, err)
