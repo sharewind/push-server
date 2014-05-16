@@ -43,12 +43,13 @@ json data
 client 订阅指定的channel
 
 <code>
-SUB[space]<channel_id>\ n
-  
-<channel_id>  - 订阅频道的ID(int64)
+SUB[space]&lt;channel_id&gt;\ n  
+&lt;channel_id&gt; - 订阅频道的ID(int64)
 </code>
 
-Success Response:<code>OK</code>
+Success Response:
+<code>SUBOK</code>
+
 Error Response:
 <code>
 E_INVALID_CLIENT  
