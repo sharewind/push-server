@@ -318,6 +318,7 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 		}
 	}
 
+	log.Debug("PROTOCOL: [%s] identify finish!", client)
 	go p.checkOfflineMessage(client)
 	return nil, nil
 }
@@ -475,13 +476,15 @@ exit:
 
 func (p *protocol) checkOfflineMessage(client *client) {
 
+	log.Debug("start GetOfflineMessages clientID %d ", client.ClientID)
+
 	messageIDs, err := model.GetOfflineMessages(client.ClientID)
 	if err != nil {
 		log.Error("GetOfflineMessages clientID %d error %d ", client.ClientID, err)
 		return
 	}
 
-	// log.Error("GetOfflineMessages clientID %d msgIDs %s", client.ClientID, messageIDs)
+	log.Debug("GetOfflineMessages clientID %d msgIDs %s", client.ClientID, messageIDs)
 	if messageIDs == nil {
 		return
 	}
