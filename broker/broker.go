@@ -4,8 +4,11 @@ import (
 	"code.sohuno.com/kzapp/push-server/model"
 	"code.sohuno.com/kzapp/push-server/util"
 
+	"crypto/md5"
 	"errors"
 	"fmt"
+	"hash/crc32"
+	"io"
 	"log"
 	"net"
 	"runtime"
@@ -19,10 +22,56 @@ const DefaultClientMapSize = 200 * 10000
 
 var offlineError = errors.New("client offline error")
 
+const (
+	StateInit = iota
+	StateDisconnected
+	StateConnected
+	StateSubscribed
+	// close has started. responses are ok, but no new messages will be sent
+	StateClosing
+)
+
+type context struct {
+	broker *Broker
+}
+
 type PubMessage struct {
 	pubID    int64
 	deviceID int64
 	msg      *model.Message
+}
+
+type brokerOptions struct {
+	// basic options
+	ID               int64  `flag:"worker-id" cfg:"id"`
+	Verbose          bool   `flag:"verbose"`
+	TCPAddress       string `flag:"tcp-address"`
+	HTTPAddress      string `flag:"http-address"`
+	BroadcastAddress string `flag:"broadcast-address"`
+
+	MaxBodySize   int64 `flag:"max-body-size"`
+	ClientTimeout time.Duration
+}
+
+func NewBrokerOptions() *brokerOptions {
+	// hostname, err := os.Hostname()
+	hostname := "sohu"
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	o := &brokerOptions{
+		TCPAddress:  "0.0.0.0:8600",
+		HTTPAddress: "0.0.0.0:8601",
+
+		MaxBodySize:   5 * 1024768,
+		ClientTimeout: 60 * time.Second,
+	}
+
+	h := md5.New()
+	io.WriteString(h, hostname)
+	o.ID = int64(crc32.ChecksumIEEE(h.Sum(nil)) % 1024)
+	return o
 }
 
 type Broker struct {
