@@ -13,6 +13,10 @@ import (
 	"code.sohuno.com/kzapp/push-server/util"
 )
 
+type context struct {
+	api *PushAPI
+}
+
 type PushAPI struct {
 	httpAddr      *net.TCPAddr
 	brokerTcpAddr *string
