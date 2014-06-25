@@ -1,4 +1,4 @@
-package broker
+package main
 
 import (
 	"io"
@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	// "strings"
+	"log"
 	"time"
 
 	"code.sohuno.com/kzapp/push-server/model"
@@ -114,7 +115,7 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if int64(len(body)) == readMax {
-		log.Error("/put hit max message size")
+		log.Printf("/put hit max message size")
 		util.ApiResponse(w, 400, MsgErr, Msg[MsgErr], nil)
 		return
 	}
@@ -125,35 +126,35 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 
 	reqParams, err := url.ParseQuery(req.URL.RawQuery)
 	if err != nil {
-		log.Error("failed to parse request params - %s", err.Error())
+		log.Printf("failed to parse request params - %s", err.Error())
 		util.ApiResponse(w, 400, ParamErr, Msg[ParamErr], nil)
 		return
 	}
 
 	channel_id := reqParams.Get("channel_id")
 	if err != nil {
-		log.Error("failed to parse channel_id params - %s", err.Error())
+		log.Printf("failed to parse channel_id params - %s", err.Error())
 		util.ApiResponse(w, 400, ChannelIdErr, Msg[ChannelIdErr], nil)
 		return
 	}
 
 	// _, err = model.FindChannelByID(channel_id)
 	// if err != nil {
-	// 	log.Error("can not find channel  - %s", err.Error())
+	// 	log.Printf("can not find channel  - %s", err.Error())
 	// 	util.ApiResponse(w, 400, NoSubErr, Msg[NoSubErr], nil)
 	// 	return
 	// }
 
 	// push_type, err := strconv.ParseInt(reqParams.Get("push_type"), 10, 8)
 	// if err != nil {
-	// 	log.Error("failed to parse push_type params - %s", err.Error())
+	// 	log.Printf("failed to parse push_type params - %s", err.Error())
 	// 	util.ApiResponse(w, 400, "INVALID_REQUEST", nil)
 	// 	return
 	// }
 
 	device_type, err := strconv.ParseInt(reqParams.Get("device_type"), 10, 8)
 	if err != nil {
-		log.Error("failed to parse device_type params - %s", err.Error())
+		log.Printf("failed to parse device_type params - %s", err.Error())
 		util.ApiResponse(w, 400, DeviceTypeErr, Msg[DeviceTypeErr], nil)
 		return
 	}
@@ -168,7 +169,7 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	err = model.SaveMessage(msg)
 	if err != nil {
-		log.Error("failed to SaveMessage %#v ,err=%s", msg, err.Error())
+		log.Printf("failed to SaveMessage %#v ,err=%s", msg, err.Error())
 		util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
 		return
 	}

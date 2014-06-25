@@ -7,8 +7,6 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-
-	"code.sohuno.com/kzapp/push-server/client"
 )
 
 var (

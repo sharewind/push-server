@@ -1,7 +1,8 @@
-package api
+package main
 
 import (
 	"io"
+	// "log"
 	"net/http"
 	"strconv"
 	"time"
@@ -78,7 +79,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case "/debug/pprof/threadcreate":
 		httpprof.Handler("threadcreate").ServeHTTP(w, req)
 	default:
-		log.Error("404 %s", req.URL.Path)
+		// log.Printf("404 %s", req.URL.Path)
 		util.ApiResponse(w, 404, NotFound, Msg[NotFound], nil)
 	}
 }

@@ -1,4 +1,4 @@
-package broker
+package main
 
 import (
 	"crypto/md5"
@@ -18,15 +18,6 @@ type brokerOptions struct {
 
 	MaxBodySize   int64 `flag:"max-body-size"`
 	ClientTimeout time.Duration
-
-	// TLS config
-	TLSCert string `flag:"tls-cert"`
-	TLSKey  string `flag:"tls-key"`
-
-	// compression
-	DeflateEnabled  bool `flag:"deflate"`
-	MaxDeflateLevel int  `flag:"max-deflate-level"`
-	SnappyEnabled   bool `flag:"snappy"`
 }
 
 func NewBrokerOptions() *brokerOptions {
@@ -42,15 +33,10 @@ func NewBrokerOptions() *brokerOptions {
 
 		MaxBodySize:   5 * 1024768,
 		ClientTimeout: 60 * time.Second,
-
-		DeflateEnabled:  true,
-		MaxDeflateLevel: 6,
-		SnappyEnabled:   true,
 	}
 
 	h := md5.New()
 	io.WriteString(h, hostname)
 	o.ID = int64(crc32.ChecksumIEEE(h.Sum(nil)) % 1024)
-
 	return o
 }

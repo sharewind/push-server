@@ -1,10 +1,10 @@
-package api
+package main
 
 import (
 	"crypto/md5"
-	"github.com/op/go-logging"
 	"hash/crc32"
 	"io"
+	"log"
 	"net"
 	"os"
 	"runtime"
@@ -12,9 +12,6 @@ import (
 
 	"code.sohuno.com/kzapp/push-server/util"
 )
-
-var module = "api"
-var log = logging.MustGetLogger(module)
 
 type PushAPI struct {
 	httpAddr      *net.TCPAddr
@@ -24,11 +21,10 @@ type PushAPI struct {
 	exitChan      chan int
 	waitGroup     util.WaitGroupWrapper
 	IDSeq         int64
-	logLevel      *string
 }
 
 // NewWriter returns an instance of Writer for the specified address
-func NewPushAPI(httpAddress *string, brokerTcpAddress *string, logLevel *string) *PushAPI {
+func NewPushAPI(httpAddress *string, brokerTcpAddress *string) *PushAPI {
 
 	if len(*httpAddress) == 0 {
 		log.Fatalf("httpAddress required.")
@@ -54,14 +50,11 @@ func NewPushAPI(httpAddress *string, brokerTcpAddress *string, logLevel *string)
 		idChan:        make(chan int64, 4096),
 		exitChan:      make(chan int),
 		IDSeq:         ID,
-		logLevel:      logLevel,
 	}
 	return p
 }
 
 func (p *PushAPI) Main() {
-
-	util.SetLevel(module, p.logLevel)
 
 	context := &context{p}
 
@@ -85,11 +78,11 @@ func (p *PushAPI) idPump() {
 		id, err := factory.NewGUID(p.IDSeq)
 
 		if err != nil {
-			log.Error("id pump err %s", err.Error())
+			log.Printf("idPump err %s", err.Error())
 			now := time.Now()
 			if now.Sub(lastError) > time.Second {
 				// only print the error once/second
-				log.Error("%s", err.Error())
+				log.Printf("idPump error %s", err.Error())
 				lastError = now
 			}
 			runtime.Gosched()
@@ -104,7 +97,7 @@ func (p *PushAPI) idPump() {
 	}
 
 exit:
-	log.Debug("ID Pump: closing")
+	log.Printf("ID Pump: closing")
 }
 
 func (p *PushAPI) Exit() {

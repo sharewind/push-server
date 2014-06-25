@@ -1,4 +1,6 @@
 build
+api/api
+broker/broker
 apps/broker/broker
 apps/client/client
 apps/client/main

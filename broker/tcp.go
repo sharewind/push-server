@@ -1,7 +1,8 @@
-package broker
+package main
 
 import (
 	"io"
+	"log"
 	"net"
 
 	"code.sohuno.com/kzapp/push-server/util"
@@ -23,7 +24,7 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 		if clientConn != nil {
 			clientConn.Close()
 		}
-		log.Error("failed to read protocol version - %s", err.Error())
+		log.Printf("failed to read protocol version - %s", err.Error())
 		return
 	}
 	protocolMagic := string(buf)
@@ -37,13 +38,13 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 	default:
 		util.SendFramedResponse(clientConn, util.FrameTypeError, []byte("E_BAD_PROTOCOL"))
 		clientConn.Close()
-		log.Error("client(%s) bad protocol magic '%s'", clientConn.RemoteAddr(), protocolMagic)
+		log.Printf("client(%s) bad protocol magic '%s'", clientConn.RemoteAddr(), protocolMagic)
 		return
 	}
 
 	err = prot.IOLoop(clientConn)
 	if err != nil {
-		log.Error("client(%s) - %s", clientConn.RemoteAddr(), err.Error())
+		log.Printf("client(%s) - %s", clientConn.RemoteAddr(), err.Error())
 		return
 	}
 }

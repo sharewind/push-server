@@ -1,12 +1,12 @@
-package broker
+package main
 
 import (
 	"code.sohuno.com/kzapp/push-server/model"
 	"code.sohuno.com/kzapp/push-server/util"
-	"crypto/tls"
+
 	"errors"
 	"fmt"
-	"github.com/op/go-logging"
+	"log"
 	"net"
 	"runtime"
 	"sync"
@@ -18,8 +18,6 @@ import (
 const DefaultClientMapSize = 200 * 10000
 
 var offlineError = errors.New("client offline error")
-
-var log = logging.MustGetLogger("broker")
 
 type PubMessage struct {
 	pubID    int64
@@ -43,7 +41,6 @@ type Broker struct {
 	httpAddr     *net.TCPAddr
 	tcpListener  net.Listener
 	httpListener net.Listener
-	tlsConfig    *tls.Config
 
 	exitChan  chan int
 	idChan    chan int64
@@ -57,11 +54,6 @@ type Broker struct {
 
 func NewBroker(options *brokerOptions) *Broker {
 
-	var tlsConfig *tls.Config
-	if options.MaxDeflateLevel < 1 || options.MaxDeflateLevel > 9 {
-		log.Fatalf("--max-deflate-level must be [1,9]")
-	}
-
 	tcpAddr, err := net.ResolveTCPAddr("tcp", options.TCPAddress)
 	if err != nil {
 		log.Fatal(err)
@@ -70,18 +62,6 @@ func NewBroker(options *brokerOptions) *Broker {
 	httpAddr, err := net.ResolveTCPAddr("tcp", options.HTTPAddress)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if options.TLSCert != "" || options.TLSKey != "" {
-		cert, err := tls.LoadX509KeyPair(options.TLSCert, options.TLSKey)
-		if err != nil {
-			log.Fatalf("ERROR: failed to LoadX509KeyPair %s", err.Error())
-		}
-		tlsConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			ClientAuth:   tls.VerifyClientCertIfGiven,
-		}
-		tlsConfig.BuildNameToCertificate()
 	}
 
 	b := &Broker{
@@ -98,7 +78,6 @@ func NewBroker(options *brokerOptions) *Broker {
 		clientOfflineChan: make(chan *PubMessage, 10240000),
 		// backPubChan:       make(chan *client.Command, 1024000),
 		// ackChan: make(chan *AckMessage, 1024000),
-		tlsConfig: tlsConfig,
 	}
 
 	return b
@@ -163,7 +142,7 @@ func (b *Broker) idPump() {
 			now := time.Now()
 			if now.Sub(lastError) > time.Second {
 				// only print the error once/second
-				log.Error("%s", err.Error())
+				log.Printf("idPump error %s", err.Error())
 				lastError = now
 			}
 			runtime.Gosched()
@@ -177,38 +156,38 @@ func (b *Broker) idPump() {
 	}
 
 exit:
-	log.Debug("ID Pump: closing")
+	log.Printf("ID Pump: closing")
 }
 
 // AddClient adds a client to the Channel's client list
 func (b *Broker) AddClient(clientID int64, client *client) {
-	// log.Notice("add client lock")
+	// log.Printf("add client lock")
 	b.Lock()
 	defer b.Unlock()
 
 	key := clientID //fmt.Sprintf("%d_%s", clientID, channelID)
 	_, ok := b.clients[key]
 	if ok {
-		log.Notice("Warn!! client exist and return [%s] = %s", key, client)
+		log.Printf("Warn!! client exist and return [%s] = %s", key, client)
 	}
 	b.clients[key] = client
-	// log.Notice("put client[%d] = %s", key, client)
+	// log.Printf("put client[%d] = %s", key, client)
 }
 
 // RemoveClient removes a client from the Channel's client list
 func (b *Broker) RemoveClient(clientID int64) {
-	// log.Notice("rm client lock")
+	// log.Printf("rm client lock")
 	b.Lock()
 	defer b.Unlock()
 
 	key := clientID //fmt.Sprintf("%d_%s", clientID, channelID)
 	_, ok := b.clients[key]
 	if !ok {
-		log.Notice("client not exist and return [%s]", key)
+		log.Printf("client not exist and return [%s]", key)
 		return
 	}
 	delete(b.clients, key)
-	// log.Notice("remove client[%d] = %s", key)
+	// log.Printf("remove client[%d] = %s", key)
 }
 
 func (b *Broker) GetClient(clientID int64) (client *client, err error) {
@@ -216,7 +195,7 @@ func (b *Broker) GetClient(clientID int64) (client *client, err error) {
 	defer b.RUnlock()
 
 	key := clientID //fmt.Sprintf("%d", clientID)
-	// log.Notice("get client[%s] ", key)
+	// log.Printf("get client[%s] ", key)
 
 	client, ok := b.clients[key]
 	if !ok {
@@ -244,14 +223,14 @@ func (b *Broker) ResetStats() {
 }
 
 func (b *Broker) router() {
-	log.Debug("router start ..............")
+	log.Printf("router start ..............")
 	for {
 		select {
 		case message := <-b.incomingMsgChan:
-			log.Debug("get imcoming %s", message)
+			log.Printf("get imcoming %s", message)
 			b.produceMessages(message)
 		case pub := <-b.clientPubChan:
-			// log.Debug("get pub  %s", pub)
+			// log.Printf("get pub  %s", pub)
 			//TODO save pub msg to mongo on stop
 			err := b.pushMessage2Client(pub)
 			if err != nil {
@@ -259,33 +238,33 @@ func (b *Broker) router() {
 			}
 			// FIXME should process err on send
 		// case ack := <-b.ackChan:
-		// 	log.Debug("get ack %s", ack)
+		// 	log.Printf("get ack %s", ack)
 		// 	w.processAck(ack)
 		case <-b.exitChan:
 			goto exit
 		}
 	}
 exit:
-	log.Debug("broker exit router")
+	log.Printf("broker exit router")
 }
 
 func (b *Broker) persisOffline() {
-	log.Debug("persisOffline start ..............")
+	log.Printf("persisOffline start ..............")
 	for {
 		select {
 		case pub := <-b.clientOfflineChan:
-			// log.Debug("get offline %s", pub)
+			// log.Printf("get offline %s", pub)
 			//TODO save offline msg to mongo on stop
 			err := model.SaveOfflineMessage(pub.deviceID, pub.msg.ID)
 			if err != nil {
-				log.Error("saveOfflineMessage error %s", err)
+				log.Printf("saveOfflineMessage error %s", err)
 			}
 		case <-b.exitChan:
 			goto exit
 		}
 	}
 exit:
-	log.Debug("broker exit persisOffline")
+	log.Printf("broker exit persisOffline")
 }
 
 // PutMessage writes to the appropriate incoming message channel
@@ -298,12 +277,12 @@ func (w *Broker) PutMessage(msg *model.Message) error {
 	w.incomingMsgChan <- msg
 
 	// atomic.AddUint64(&w.PubCount, 1)
-	log.Debug("[worker]<PutMessage> %#v", msg)
+	log.Printf("[worker]<PutMessage> %#v", msg)
 	return nil
 }
 
 func (w *Broker) produceMessages(message *model.Message) {
-	// log.Debug("[worker]<produceMessages> %#v", message)
+	// log.Printf("[worker]<produceMessages> %#v", message)
 	// save message on mongodb
 
 	// total, err := model.CountSubscribeByChannelId(message.ChannelID, message.DeviceType)
@@ -311,14 +290,14 @@ func (w *Broker) produceMessages(message *model.Message) {
 	// 	log.Error(err.Error())
 	// }
 	// pageCount := (((total - 1) / 1000) + 1)
-	// log.Debug("worker all sum:%d time:%d", total, pageCount)
+	// log.Printf("worker all sum:%d time:%d", total, pageCount)
 
 	lastID := int64(0)
 	limit := 1000
 	for i := 0; ; i++ {
 		subs, err := model.FindSubscribeByChannelID(lastID, message.ChannelID, message.DeviceType, limit)
 		if err != nil {
-			log.Debug("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
+			log.Printf("ERROR: FindSubscribeByChannelID channelId=%d,deviceType=%d error=%s", message.ChannelID, message.DeviceType, err)
 			return
 		}
 
@@ -328,17 +307,17 @@ func (w *Broker) produceMessages(message *model.Message) {
 
 		for _, sub := range subs {
 			atomic.AddUint64(&w.MessageCount, 1)
-			// log.Debug("subs %s", sub)
+			// log.Printf("subs %s", sub)
 			w.clientPubChan <- &PubMessage{<-w.idChan, sub.DeviceID, message}
 			lastID = sub.ID
 		}
-		log.Debug("get subs page %d  count %d  lastID %d finished!", i, len(subs), lastID)
+		log.Printf("get subs page %d  count %d  lastID %d finished!", i, len(subs), lastID)
 	}
-	log.Debug("get subs_all finished!.........")
+	log.Printf("get subs_all finished!.........")
 }
 
 // func (w *Broker) processAck(ack *model.AckMessage) {
-// 	log.Debug("process ack  %s", ack)
+// 	log.Printf("process ack  %s", ack)
 // 	if ack.AckType != ACK_SUCCESS {
 // 		model.SaveOfflineMessage(ack.DeviceID, ack.MessageID)
 // 		model.IncrMsgErrCount(ack.MessageID, 1)
@@ -351,16 +330,16 @@ func (w *Broker) produceMessages(message *model.Message) {
 
 func (w *Broker) pushMessage2Client(pub *PubMessage) (err error) {
 
-	// log.Debug("process on pub %s", pub)
+	// log.Printf("process on pub %s", pub)
 	destClient, err := w.GetClient(pub.deviceID)
-	// log.Notice("get client finish %s", pub.deviceID)
+	// log.Printf("get client finish %s", pub.deviceID)
 	if err != nil || destClient == nil {
-		// log.Debug("error %s, client %d is null, params =%s", err, pub.deviceID, pub)
+		// log.Printf("error %s, client %d is null, params =%s", err, pub.deviceID, pub)
 		return offlineError
 	}
 
-	// log.Debug("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
-	// log.Notice("new message  %s", pub.DeviceID)
+	// log.Printf("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
+	// log.Printf("new message  %s", pub.DeviceID)
 	msg := &Message{
 		Id:        util.Guid(pub.msg.ID).Hex(),
 		Body:      []byte(pub.msg.Body),

@@ -3,12 +3,12 @@ package util
 import (
 	"errors"
 	"fmt"
+	"github.com/bitly/go-simplejson"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"time"
-
-	"github.com/bitly/go-simplejson"
 )
 
 type deadlinedConn struct {
@@ -92,27 +92,27 @@ func ApiPostRequest(endpoint string) (*simplejson.Json, error) {
 		}
 	}()
 	if err != nil {
-		log.Error(err.Error())
+		log.Printf(err.Error())
 		return nil, err
 	}
 
 	req.Header.Set("Connection", "close")
 	resp, err := httpclient.Do(req)
 	if err != nil {
-		log.Error(err.Error())
+		log.Printf(err.Error())
 		return nil, err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		log.Error(err.Error())
+		log.Printf(err.Error())
 		return nil, err
 	}
 
 	data, err := simplejson.NewJson(body)
 	if err != nil {
-		log.Error(err.Error())
+		log.Printf(err.Error())
 		return nil, err
 	}
 

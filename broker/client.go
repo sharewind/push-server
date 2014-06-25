@@ -1,12 +1,9 @@
-package broker
+package main
 
 import (
 	"bufio"
-	"compress/flate"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/mreiferson/go-snappystream"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -16,20 +13,11 @@ import (
 const DefaultBufferSize = 512
 
 type identifyDataV2 struct {
-	ClientID            int64  `json:"client_id"`
-	Role                string `json:"role"`
-	Hostname            string `json:"hostname"`
-	HeartbeatInterval   int    `json:"heartbeat_interval"`
-	OutputBufferSize    int    `json:"output_buffer_size"`
-	OutputBufferTimeout int    `json:"output_buffer_timeout"`
-	FeatureNegotiation  bool   `json:"feature_negotiation"`
-	TLSv1               bool   `json:"tls_v1"`
-	Deflate             bool   `json:"deflate"`
-	DeflateLevel        int    `json:"deflate_level"`
-	Snappy              bool   `json:"snappy"`
-	SampleRate          int32  `json:"sample_rate"`
-	UserAgent           string `json:"user_agent"`
-	MsgTimeout          int    `json:"msg_timeout"`
+	ClientID            int64 `json:"client_id"`
+	HeartbeatInterval   int   `json:"heartbeat_interval"`
+	OutputBufferSize    int   `json:"output_buffer_size"`
+	OutputBufferTimeout int   `json:"output_buffer_timeout"`
+	MsgTimeout          int   `json:"msg_timeout"`
 }
 
 type ClientResponse struct {
@@ -47,10 +35,6 @@ type client struct {
 
 	// original connection
 	net.Conn
-
-	// connections based on negotiated features
-	tlsConn     *tls.Conn
-	flateWriter *flate.Writer
 
 	// reading/writing interfaces
 	Reader *bufio.Reader
@@ -76,15 +60,6 @@ type client struct {
 	SubChannel    string
 	clientMsgChan chan *Message
 	responseChan  chan *ClientResponse
-
-	SampleRate int32
-
-	// IdentifyEventChan chan identifyEvent
-	// SubEventChan      chan *Channel
-
-	TLS     int32
-	Snappy  int32
-	Deflate int32
 
 	// re-usable buffer for reading the 4-byte lengths off the wire
 	lenBuf   [4]byte
@@ -130,26 +105,11 @@ func (c *client) String() string {
 }
 
 func (c *client) Identify(data identifyDataV2) error {
-	hostname := data.Hostname
-
 	c.Lock()
 	c.ClientID = data.ClientID
-	c.Hostname = hostname
-	c.UserAgent = data.UserAgent
-	c.Role = data.Role
 	c.Unlock()
 
 	err := c.SetHeartbeatInterval(data.HeartbeatInterval)
-	if err != nil {
-		return err
-	}
-
-	err = c.SetOutputBufferSize(data.OutputBufferSize)
-	if err != nil {
-		return err
-	}
-
-	err = c.SetOutputBufferTimeout(data.OutputBufferTimeout)
 	if err != nil {
 		return err
 	}
@@ -180,119 +140,12 @@ func (c *client) SetHeartbeatInterval(desiredInterval int) error {
 	return nil
 }
 
-func (c *client) SetOutputBufferSize(desiredSize int) error {
-	var size int
-
-	switch {
-	case desiredSize == -1:
-		// effectively no buffer (every write will go directly to the wrapped net.Conn)
-		size = 1
-	case desiredSize == 0:
-		// do nothing (use default)
-	case desiredSize >= 64:
-		size = desiredSize
-	default:
-		return errors.New(fmt.Sprintf("output buffer size (%d) is invalid", desiredSize))
-	}
-
-	if size > 0 {
-		c.Lock()
-		defer c.Unlock()
-		c.OutputBufferSize = size
-		err := c.Writer.Flush()
-		if err != nil {
-			return err
-		}
-		c.Writer = bufio.NewWriterSize(c.Conn, size)
-	}
-
-	return nil
-}
-
-func (c *client) SetOutputBufferTimeout(desiredTimeout int) error {
-	c.Lock()
-	defer c.Unlock()
-
-	switch {
-	case desiredTimeout == -1:
-		c.OutputBufferTimeout = 0
-	case desiredTimeout == 0:
-		// do nothing (use default)
-	case desiredTimeout >= 1:
-		c.OutputBufferTimeout = time.Duration(desiredTimeout) * time.Millisecond
-	default:
-		return errors.New(fmt.Sprintf("output buffer timeout (%d) is invalid", desiredTimeout))
-	}
-
-	return nil
-}
-
-func (c *client) UpgradeTLS() error {
-	c.Lock()
-	defer c.Unlock()
-
-	tlsConn := tls.Server(c.Conn, c.context.broker.tlsConfig)
-	err := tlsConn.Handshake()
-	if err != nil {
-		return err
-	}
-	c.tlsConn = tlsConn
-
-	c.Reader = bufio.NewReaderSize(c.tlsConn, DefaultBufferSize)
-	c.Writer = bufio.NewWriterSize(c.tlsConn, c.OutputBufferSize)
-
-	atomic.StoreInt32(&c.TLS, 1)
-
-	return nil
-}
-
-func (c *client) UpgradeDeflate(level int) error {
-	c.Lock()
-	defer c.Unlock()
-
-	conn := c.Conn
-	if c.tlsConn != nil {
-		conn = c.tlsConn
-	}
-
-	c.Reader = bufio.NewReaderSize(flate.NewReader(conn), DefaultBufferSize)
-
-	fw, _ := flate.NewWriter(conn, level)
-	c.flateWriter = fw
-	c.Writer = bufio.NewWriterSize(fw, c.OutputBufferSize)
-
-	atomic.StoreInt32(&c.Deflate, 1)
-
-	return nil
-}
-
-func (c *client) UpgradeSnappy() error {
-	c.Lock()
-	defer c.Unlock()
-
-	conn := c.Conn
-	if c.tlsConn != nil {
-		conn = c.tlsConn
-	}
-
-	c.Reader = bufio.NewReaderSize(snappystream.NewReader(conn, snappystream.SkipVerifyChecksum), DefaultBufferSize)
-	c.Writer = bufio.NewWriterSize(snappystream.NewWriter(conn), c.OutputBufferSize)
-
-	atomic.StoreInt32(&c.Snappy, 1)
-
-	return nil
-}
-
 func (c *client) Flush() error {
 	c.SetWriteDeadline(time.Now().Add(time.Second))
 
 	err := c.Writer.Flush()
 	if err != nil {
 		return err
-	}
-
-	if c.flateWriter != nil {
-		return c.flateWriter.Flush()
 	}
 
 	return nil

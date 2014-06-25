@@ -1,4 +1,4 @@
-package broker
+package main
 
 const (
 	StateInit = iota

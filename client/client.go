@@ -1,21 +1,19 @@
-package client
+package main
 
 import (
 	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/op/go-logging"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"code.sohuno.com/kzapp/push-server/broker"
+	broker "code.sohuno.com/kzapp/push-server/broker"
 	. "code.sohuno.com/kzapp/push-server/util"
 )
-
-var log = logging.MustGetLogger("client")
 
 // Writer is a high-level type to publish to NSQ.
 //
@@ -93,13 +91,13 @@ func (c *Client) AutoPump(addr string, subChannelID string, serial_no string) {
 
 			err := c.Register(addr, serial_no)
 			if err == nil {
-				log.Info("<%s> regiester to %s success ", c, addr)
+				log.Printf("<%s> regiester to %s success ", c, addr)
 				break
 			}
 			if err != nil {
-				log.Debug("<%s> ERROR: failed to connect to %s - %s", c, addr, err.Error())
+				log.Printf("<%s> ERROR: failed to connect to %s - %s", c, addr, err.Error())
 			}
-			log.Debug("[%s] re-connecting in 15 seconds...", addr)
+			log.Printf("[%s] re-connecting in 15 seconds...", addr)
 			time.Sleep(15 * time.Second)
 		}
 		//
@@ -109,11 +107,11 @@ func (c *Client) AutoPump(addr string, subChannelID string, serial_no string) {
 
 func (c *Client) Register(addr string, serial_no string) error {
 	endpoint := fmt.Sprintf("http://%s/registration?serial_no=%s&device_type=3&device_name=搜狐Android测试机%d", addr, serial_no, time.Now().Unix())
-	log.Debug("LOOKUPD: querying %s", endpoint)
+	log.Printf("LOOKUPD: querying %s", endpoint)
 
 	data, err := ApiPostRequest(endpoint)
 	if err != nil {
-		log.Error("Register %s - %s - %s", addr, err.Error(), data)
+		log.Printf("Register %s - %s - %s", addr, err.Error(), data)
 		return err
 	}
 
@@ -133,15 +131,15 @@ func (c *Client) ConnectWithRetry() {
 
 			err := c.Connect()
 			if err == nil {
-				log.Info("connect to %s success ", c.brokerAddr)
+				log.Printf("connect to %s success ", c.brokerAddr)
 				break
 			}
 
 			if err != nil {
-				log.Debug("<%s> ERROR: failed to connect to %s - %s", c, c.brokerAddr, err.Error())
+				log.Printf("<%s> ERROR: failed to connect to %s - %s", c, c.brokerAddr, err.Error())
 			}
 
-			log.Debug("<%s>  re-connecting [%s] in 15 seconds...", c, c.brokerAddr)
+			log.Printf("<%s>  re-connecting [%s] in 15 seconds...", c, c.brokerAddr)
 			time.Sleep(15 * time.Second)
 		}
 
@@ -158,10 +156,10 @@ func (c *Client) Connect() error {
 		return ErrNotConnected
 	}
 
-	log.Debug("[%s] connecting to %s .....", c, c.brokerAddr)
+	log.Printf("[%s] connecting to %s .....", c, c.brokerAddr)
 	conn, err := net.DialTimeout("tcp", c.brokerAddr, time.Second*5)
 	if err != nil {
-		log.Error("[%s] failed to dial %s - %s", c, c.brokerAddr, err)
+		log.Printf("[%s] failed to dial %s - %s", c, c.brokerAddr, err)
 		atomic.StoreInt32(&c.state, StateInit)
 		return err
 	}
@@ -172,7 +170,7 @@ func (c *Client) Connect() error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	_, err = c.Write(MagicV1)
 	if err != nil {
-		log.Error("[%s] failed to write magic - %s", c, err)
+		log.Printf("[%s] failed to write magic - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -184,7 +182,7 @@ func (c *Client) Connect() error {
 	ci["role"] = "client"
 	cmd, err := Identify(ci)
 	if err != nil {
-		log.Error("[%s] failed to create IDENTIFY command - %s", c, err)
+		log.Printf("[%s] failed to create IDENTIFY command - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -192,7 +190,7 @@ func (c *Client) Connect() error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err = cmd.Write(c)
 	if err != nil {
-		log.Error("[%s] failed to write IDENTIFY - %s", c, err)
+		log.Printf("[%s] failed to write IDENTIFY - %s", c, err)
 		c.Close()
 		return err
 	}
@@ -200,20 +198,20 @@ func (c *Client) Connect() error {
 	c.SetReadDeadline(time.Now().Add(c.HeartbeatInterval * 2))
 	resp, err := ReadResponse(c)
 	if err != nil {
-		log.Error("[%s] failed to read IDENTIFY response - %s", c, err)
+		log.Printf("[%s] failed to read IDENTIFY response - %s", c, err)
 		c.Close()
 		return err
 	}
 
 	frameType, data, err := UnpackResponse(resp)
 	if err != nil {
-		log.Error("[%s] failed to unpack IDENTIFY response - %s", c, resp)
+		log.Printf("[%s] failed to unpack IDENTIFY response - %s", c, resp)
 		c.Close()
 		return err
 	}
 
 	if frameType == FrameTypeError {
-		log.Error("[%s] IDENTIFY returned error response - %s", c, data)
+		log.Printf("[%s] IDENTIFY returned error response - %s", c, data)
 		c.Close()
 		return errors.New(string(data))
 	}
@@ -233,11 +231,11 @@ func (c *Client) Subscribe(channel_id string) error {
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err := cmd.Write(c)
 	if err != nil {
-		log.Error("[%s] failed to write Subscribe - %s", c, err)
+		log.Printf("[%s] failed to write Subscribe - %s", c, err)
 		c.Close()
 		return err
 	}
-	log.Info("[%s] success to write Subscribe ", c)
+	log.Printf("[%s] success to write Subscribe ", c)
 	return nil
 }
 
@@ -252,7 +250,7 @@ func (c *Client) Close() {
 		// block the caller from making progress
 		c.wg.Wait()
 		atomic.StoreInt32(&c.state, StateInit)
-		// log.Debug("set client to StateInit ")
+		// log.Printf("set client to StateInit ")
 	}()
 }
 
@@ -269,7 +267,7 @@ func (c *Client) messagePump() {
 			c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 			err = cmd.Write(c)
 			if err != nil {
-				log.Error("[%s] failed to write HeartBeat - %s", c, err)
+				log.Printf("[%s] failed to write HeartBeat - %s", c, err)
 				c.stopBrokerConn()
 				goto exit
 			}
@@ -283,10 +281,10 @@ func (c *Client) messagePump() {
 exit:
 	heartbeatTicker.Stop()
 	if err != nil {
-		log.Debug("client: [%s] messagePump error - %s", c, err.Error())
+		log.Printf("client: [%s] messagePump error - %s", c, err.Error())
 	}
 	c.wg.Done()
-	log.Debug("client: [%s] exiting messagePump", c)
+	log.Printf("client: [%s] exiting messagePump", c)
 }
 
 var MessageCount uint64 = 0
@@ -295,7 +293,7 @@ func (c *Client) readLoop() {
 	rbuf := bufio.NewReader(c.Conn)
 	for {
 		if atomic.LoadInt32(&c.stopFlag) == 1 {
-			log.Info("[%s] stopBrokerConn on client stopFlag ", c.LocalAddr().String())
+			log.Printf("[%s] stopBrokerConn on client stopFlag ", c.LocalAddr().String())
 			c.stopBrokerConn()
 			goto exit
 		}
@@ -317,7 +315,7 @@ func (c *Client) readLoop() {
 			}
 
 			atomic.AddUint64(&MessageCount, 1)
-			log.Info("[%s] FrameTypeMessage receive %d  %s - %s", c.Conn.RemoteAddr(), atomic.LoadUint64(&MessageCount), msg.Id, msg.Body)
+			log.Printf("[%s] FrameTypeMessage receive %d  %s - %s", c.Conn.RemoteAddr(), atomic.LoadUint64(&MessageCount), msg.Id, msg.Body)
 
 		case FrameTypeResponse:
 			switch {
@@ -325,32 +323,32 @@ func (c *Client) readLoop() {
 				// server is ready for us to close (it ack'd our StartClose)
 				// we can assume we will not receive any more messages over this channel
 				// (but we can still write back responses)
-				log.Debug("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
+				log.Printf("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
 				atomic.StoreInt32(&c.stopFlag, 1)
 			case bytes.Equal(data, []byte("H")):
 				// var buf bytes.Buffer
-				log.Debug("[%s] heartbeat received", c)
+				log.Printf("[%s] heartbeat received", c)
 			default:
-				log.Debug("FrameTypeResponse receive %s", string(data))
+				log.Printf("FrameTypeResponse receive %s", string(data))
 			}
 		case FrameTypeError:
-			log.Debug("[%s] error from nsqd %s", c, data)
+			log.Printf("[%s] error from nsqd %s", c, data)
 		default:
-			log.Debug("[%s] unknown message type %d", c, frameType)
+			log.Printf("[%s] unknown message type %d", c, frameType)
 		}
 	}
 
 exit:
 	c.wg.Done()
-	log.Debug("[%s] readLoop exiting", c)
+	log.Printf("[%s] readLoop exiting", c)
 }
 
 func handleError(c *Client, errMsg string) {
-	log.Debug("[%s] handleError %s", c, errMsg)
+	log.Printf("[%s] handleError %s", c, errMsg)
 	atomic.StoreInt32(&c.stopFlag, 1)
 
 	go func() {
-		log.Debug("[%s] re-connecting in 15 seconds...", c.brokerAddr)
+		log.Printf("[%s] re-connecting in 15 seconds...", c.brokerAddr)
 		time.Sleep(15 * time.Second)
 
 		atomic.StoreInt32(&c.stopFlag, 0)
@@ -361,9 +359,9 @@ func handleError(c *Client, errMsg string) {
 
 func (c *Client) stopBrokerConn() {
 	c.stopper.Do(func() {
-		log.Debug("c.stopper done................")
+		log.Printf("c.stopper done................")
 		close(c.exitChan)
 		c.Close()
-		log.Debug("[%s] stopBrokerConn!", c)
+		log.Printf("[%s] stopBrokerConn!", c)
 	})
 }
