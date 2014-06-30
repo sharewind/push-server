@@ -158,13 +158,13 @@ func (b *Broker) Main() {
 	b.waitGroup.Wrap(func() { util.HTTPServer(b.httpListener, httpServer) })
 	b.waitGroup.Wrap(func() { b.idPump() })
 
-	// for i := 0; i < 160; i++ {
-	b.waitGroup.Wrap(func() { b.router() })
-	// }
-	// for i := 0; i < runtime.NumCPU(); i++ {
-	// save offline msg
-	b.waitGroup.Wrap(func() { b.persisOffline() })
-	// }
+	for i := 0; i < 160; i++ {
+		b.waitGroup.Wrap(func() { b.router() })
+	}
+	for i := 0; i < runtime.NumCPU(); i++ {
+		// save offline msg
+		b.waitGroup.Wrap(func() { b.persisOffline() })
+	}
 }
 
 func (b *Broker) Exit() {
@@ -318,12 +318,19 @@ exit:
 
 // PutMessage writes to the appropriate incoming message channel
 func (w *Broker) PutMessage(msg *model.Message) error {
+	err := model.SaveMessage(msg)
+	if err != nil {
+		log.Printf("failed to SaveMessage %#v ,err=%s", msg, err.Error())
+		return err
+	}
+
 	w.RLock()
 	defer w.RUnlock()
 	// if atomic.LoadInt32(&t.exitFlag) == 1 {
 	// 	return errors.New("exiting")
 	// }
 	w.incomingMsgChan <- msg
+	// atomic.AddUint64(&w.MessageCount, 1)
 
 	// atomic.AddUint64(&w.PubCount, 1)
 	log.Printf("[worker]<PutMessage> %#v", msg)

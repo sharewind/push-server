@@ -167,12 +167,6 @@ func (s *httpServer) putHandler(w http.ResponseWriter, req *http.Request) {
 		// PushType:   int8(push_type),
 		DeviceType: int8(device_type),
 	}
-	err = model.SaveMessage(msg)
-	if err != nil {
-		log.Printf("failed to SaveMessage %#v ,err=%s", msg, err.Error())
-		util.ApiResponse(w, 500, InternalErr, Msg[InternalErr], nil)
-		return
-	}
 
 	err = s.context.broker.PutMessage(msg)
 	if err != nil {

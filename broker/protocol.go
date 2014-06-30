@@ -162,8 +162,8 @@ func (p *protocol) Exec(client *client, cmd *Command) (*Response, error) {
 		return p.CONN(client, cmd)
 	case bytes.Equal(cmd.Name, []byte("SUB")):
 		return p.SUB(client, cmd)
-		// case bytes.Equal(params[0], []byte("PUB")):
-		// 	return p.PUB(client, params)
+	case bytes.Equal(cmd.Name, []byte("PUB")):
+		return p.PUB(client, cmd)
 	}
 
 	log.Printf("parse cmd (%s) error, line %s ", client, cmd)
@@ -436,13 +436,20 @@ func (p *protocol) PUB(client *client, cmd *Command) (*Response, error) {
 	// client_id, _ := strconv.ParseInt(string(params[1]), 10, 64)
 	// topic_id := string(params[2])
 	// message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
-	// atomic.AddUint64(&p.context.broker.MessageCount, 1)
 
-	// p.context.broker.pubChan <- &PubMessage{clientID: client_id,
-	// 	messageID: message_id,
-	// 	channelID: topic_id,
-	// 	pubClient: client,
-	// 	body:      body}
-	// log.Printf("receive params on sub  %s", params)
-	return nil, nil
+	msg := &model.Message{
+		ID:        <-p.context.broker.idChan,
+		ChannelID: topic_id,
+		CreatedAt: time.Now().UnixNano(),
+		Body:      string(body),
+		// PushType:   int8(push_type),
+		DeviceType: int8(model.ALLDevice),
+	}
+
+	err := p.context.broker.PutMessage(msg)
+	if err != nil {
+		return nil, util.NewFatalClientErr(nil, "put_error", "PUB insufficient number of parameters")
+	}
+
+	return &Response{true, []byte("PUBACK")}, nil
 }

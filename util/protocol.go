@@ -57,25 +57,6 @@ var MagicV1 = []byte("  V1")
 
 // var MagicV2 = []byte("  V2")
 
-const (
-	// when successful
-	FrameTypeResponse int32 = 0
-	// when an error occurred
-	FrameTypeError int32 = 1
-	// when it's a serialized message
-	FrameTypeMessage int32 = 2
-	// when ack a put message success/failure
-	FrameTypeAck int32 = 3
-)
-
-const (
-	ACK_SUCCESS int32 = 1
-
-	ACK_OFF int32 = 2
-
-	ACK_ERR int32 = 3
-)
-
 // The amount of time nsqd will allow a client to idle, can be overriden
 const DefaultClientTimeout = 600 * time.Second
 
