@@ -1,6 +1,7 @@
 build
 api/api
 broker/broker
+client/client
 apps/broker/broker
 apps/client/client
 apps/client/main
@@ -22,6 +23,7 @@ _posts
 # Go.gitignore
 *.prof
 *.mprof
+*.log
 
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
