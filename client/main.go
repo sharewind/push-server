@@ -21,7 +21,7 @@ func main() {
 	flagSet.Parse(os.Args[1:])
 	fmt.Println("client start!")
 
-	c := client.NewClient()
+	c := NewClient()
 	c.AutoPump(*apiHttpAddress, *subChannel, *serialNo)
 
 	exitChan := make(chan int)

@@ -15,6 +15,8 @@ import (
 	. "code.sohuno.com/kzapp/push-server/util"
 )
 
+const DefaultBufferSize = 512
+
 // Writer is a high-level type to publish to NSQ.
 //
 // A Writer instance is 1:1 with a destination `nsqd`
@@ -148,6 +150,8 @@ func (c *Client) ConnectWithRetry() {
 }
 
 func (c *Client) Connect() error {
+	var buf bytes.Buffer
+
 	if atomic.LoadInt32(&c.stopFlag) == 1 {
 		return ErrStopped
 	}
@@ -166,6 +170,7 @@ func (c *Client) Connect() error {
 
 	c.closeChan = make(chan int)
 	c.Conn = conn
+	bufReader := bufio.NewReader(conn)
 
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	_, err = c.Write(MagicV1)
@@ -175,45 +180,36 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	ci := make(map[string]interface{})
-	ci["client_id"] = c.ID
-	ci["heartbeat_interval"] = int64(c.HeartbeatInterval / time.Millisecond)
-	ci["feature_negotiation"] = true
-	ci["role"] = "client"
-	cmd, err := Identify(ci)
+	cmd, err := broker.Conn(c.ID, int64(c.HeartbeatInterval/time.Millisecond))
 	if err != nil {
-		log.Printf("[%s] failed to create IDENTIFY command - %s", c, err)
+		log.Printf("[%s] failed to create CONN command - %s", c, err)
 		c.Close()
 		return err
 	}
 
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
-	err = cmd.Write(c)
+	cmd.Write(&buf)
+	log.Printf("[%s] conn bytes %s", c, buf.Bytes())
+
+	_, err = c.Conn.Write(buf.Bytes())
 	if err != nil {
-		log.Printf("[%s] failed to write IDENTIFY - %s", c, err)
+		log.Printf("[%s] failed to write CONN - %s", c, err)
 		c.Close()
 		return err
 	}
 
 	c.SetReadDeadline(time.Now().Add(c.HeartbeatInterval * 2))
-	resp, err := ReadResponse(c)
+	resp, err := broker.ParseResponse(bufReader)
 	if err != nil {
-		log.Printf("[%s] failed to read IDENTIFY response - %s", c, err)
+		log.Printf("[%s] failed to read CONN response - %s", c, err)
 		c.Close()
 		return err
 	}
 
-	frameType, data, err := UnpackResponse(resp)
-	if err != nil {
-		log.Printf("[%s] failed to unpack IDENTIFY response - %s", c, resp)
+	if !resp.OK {
+		log.Printf("[%s] CONN returned error response - %s", c, resp.Body)
 		c.Close()
-		return err
-	}
-
-	if frameType == FrameTypeError {
-		log.Printf("[%s] IDENTIFY returned error response - %s", c, data)
-		c.Close()
-		return errors.New(string(data))
+		return errors.New(string(resp.Body))
 	}
 
 	c.stopper = sync.Once{}
@@ -227,7 +223,7 @@ func (c *Client) Connect() error {
 }
 
 func (c *Client) Subscribe(channel_id string) error {
-	cmd := Subscribe(channel_id)
+	cmd := broker.Subscribe(channel_id)
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	err := cmd.Write(c)
 	if err != nil {
@@ -263,7 +259,7 @@ func (c *Client) messagePump() {
 	for {
 		select {
 		case <-heartbeatChan:
-			cmd := HeartBeat()
+			cmd := broker.HeartBeat()
 			c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 			err = cmd.Write(c)
 			if err != nil {
@@ -298,43 +294,30 @@ func (c *Client) readLoop() {
 			goto exit
 		}
 
-		resp, err := ReadResponse(rbuf)
-		frameType, data, err := UnpackResponse(resp)
-
+		response, err := broker.ParseRespCommand(rbuf)
 		if err != nil {
-			handleError(c, fmt.Sprintf("[%s] error (%s) reading response %d %s", c, err.Error(), frameType, data))
+			handleError(c, fmt.Sprintf("[%s] error (%s) reading response ", c, err.Error()))
 			continue
 		}
 
-		switch frameType {
-		case FrameTypeMessage:
-			msg, err := broker.DecodeMessage(data)
-			if err != nil {
-				handleError(c, fmt.Sprintf("[%s] error (%s) decoding message %s", c, err.Error(), data))
-				continue
+		switch val := response.(type) {
+		case *broker.Command:
+			cmd := val
+			if bytes.Equal(cmd.Name, []byte("PUB")) {
+				atomic.AddUint64(&MessageCount, 1)
+				log.Printf("[%s] FrameTypeMessage receive %d  %s", c.Conn.RemoteAddr(), atomic.LoadUint64(&MessageCount), cmd)
+
 			}
 
-			atomic.AddUint64(&MessageCount, 1)
-			log.Printf("[%s] FrameTypeMessage receive %d  %s - %s", c.Conn.RemoteAddr(), atomic.LoadUint64(&MessageCount), msg.Id, msg.Body)
-
-		case FrameTypeResponse:
+		case *broker.Response:
+			resp := val
 			switch {
-			case bytes.Equal(data, []byte("CLOSE_WAIT")):
-				// server is ready for us to close (it ack'd our StartClose)
-				// we can assume we will not receive any more messages over this channel
-				// (but we can still write back responses)
-				log.Printf("[%s] received ACK from nsqd - now in CLOSE_WAIT", c)
-				atomic.StoreInt32(&c.stopFlag, 1)
-			case bytes.Equal(data, []byte("H")):
+			case bytes.Equal(resp.Body, []byte("H")):
 				// var buf bytes.Buffer
 				log.Printf("[%s] heartbeat received", c)
 			default:
-				log.Printf("FrameTypeResponse receive %s", string(data))
+				log.Printf("FrameTypeResponse receive %s", resp)
 			}
-		case FrameTypeError:
-			log.Printf("[%s] error from nsqd %s", c, data)
-		default:
-			log.Printf("[%s] unknown message type %d", c, frameType)
 		}
 	}
 

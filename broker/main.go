@@ -27,6 +27,10 @@ var (
 	maxBodySize = flagSet.Int64("max-body-size", 5*1024768, "maximum size of a single command body")
 )
 
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 8)
 	flagSet.Parse(os.Args[1:])

@@ -158,13 +158,13 @@ func (b *Broker) Main() {
 	b.waitGroup.Wrap(func() { util.HTTPServer(b.httpListener, httpServer) })
 	b.waitGroup.Wrap(func() { b.idPump() })
 
-	for i := 0; i < 160; i++ {
-		b.waitGroup.Wrap(func() { b.router() })
-	}
-	for i := 0; i < runtime.NumCPU(); i++ {
-		// save offline msg
-		b.waitGroup.Wrap(func() { b.persisOffline() })
-	}
+	// for i := 0; i < 160; i++ {
+	b.waitGroup.Wrap(func() { b.router() })
+	// }
+	// for i := 0; i < runtime.NumCPU(); i++ {
+	// save offline msg
+	b.waitGroup.Wrap(func() { b.persisOffline() })
+	// }
 }
 
 func (b *Broker) Exit() {
@@ -232,7 +232,7 @@ func (b *Broker) RemoveClient(clientID int64) {
 	key := clientID //fmt.Sprintf("%d_%s", clientID, channelID)
 	_, ok := b.clients[key]
 	if !ok {
-		log.Printf("client not exist and return [%s]", key)
+		log.Printf("client not exist and return [%d]", key)
 		return
 	}
 	delete(b.clients, key)
@@ -272,7 +272,7 @@ func (b *Broker) ResetStats() {
 }
 
 func (b *Broker) router() {
-	log.Printf("router start ..............")
+	// log.Printf("router start ..............")
 	for {
 		select {
 		case message := <-b.incomingMsgChan:
@@ -294,7 +294,7 @@ func (b *Broker) router() {
 		}
 	}
 exit:
-	log.Printf("broker exit router")
+	// log.Printf("broker exit router")
 }
 
 func (b *Broker) persisOffline() {
@@ -389,11 +389,11 @@ func (w *Broker) pushMessage2Client(pub *PubMessage) (err error) {
 
 	// log.Printf("get client %s by channel %s = %s  ", client_id, channel_id, destClient)
 	// log.Printf("new message  %s", pub.DeviceID)
-	msg := &Message{
-		Id:        util.Guid(pub.msg.ID).Hex(),
-		Body:      []byte(pub.msg.Body),
-		Timestamp: time.Now().UnixNano(),
-	}
-	destClient.clientMsgChan <- msg
+	// msg := &Message{
+	// 	Id:        util.Guid(pub.msg.ID).Hex(),
+	// 	Body:      []byte(pub.msg.Body),
+	// 	Timestamp: time.Now().UnixNano(),
+	// }
+	destClient.clientMsgChan <- pub.msg
 	return nil
 }

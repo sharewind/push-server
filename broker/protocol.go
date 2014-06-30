@@ -2,14 +2,11 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
 	"net"
-	// "strconv"
+	"strconv"
 	// "strings"
+	"fmt"
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -21,8 +18,6 @@ const maxTimeout = time.Hour
 
 var separatorBytes = []byte(" ")
 var heartbeatBytes = []byte("_heartbeat_")
-var identifyOKBytes = []byte("IDENTIFY OK")
-var subOkBytes = []byte("SUBACK")
 
 type protocol struct {
 	context *context
@@ -30,8 +25,8 @@ type protocol struct {
 
 func (p *protocol) IOLoop(conn net.Conn) error {
 	var err error
-	var line []byte
 	var zeroTime time.Time
+	var byteBuf bytes.Buffer
 
 	client := newClient(conn, p.context)
 
@@ -47,29 +42,17 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 			client.SetReadDeadline(zeroTime)
 		}
 
-		// ReadSlice does not allocate new space for the data each request
-		// ie. the returned slice is only valid until the next call to it
-		line, err = client.Reader.ReadBytes('\n')
+		cmd, err := ParseCommand(client.Reader)
 		if err != nil {
-			log.Printf(err.Error())
+			log.Printf("parse command error %s", err.Error())
 			break
 		}
 
-		// trim the '\n'
-		line = line[:len(line)-1]
-		// optionally trim the '\r'
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
-		}
-		// log.Printf("protocol receive line <%s>", line)
+		// if p.context.broker.options.Verbose {
+		log.Printf("PROTOCOL(V1): [%d] %s", client.ClientID, cmd)
+		// }
 
-		params := bytes.Split(line, separatorBytes)
-
-		if p.context.broker.options.Verbose {
-			log.Printf("PROTOCOL(V1): [%s] %s", client, params)
-		}
-
-		response, err := p.Exec(client, params)
+		response, err := p.Exec(client, cmd)
 		if err != nil {
 			context := ""
 			if parentErr := err.(util.ChildErr).Parent(); parentErr != nil {
@@ -77,7 +60,8 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 			}
 			log.Printf("[%s] - %s %s", client, err.Error(), context)
 
-			sendErr := p.Send(client, util.FrameTypeError, []byte(err.Error()))
+			errResponse := &Response{false, []byte(err.Error())}
+			sendErr := p.SendResponse(client, errResponse, &byteBuf)
 			if sendErr != nil {
 				break
 			}
@@ -90,7 +74,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		}
 
 		if response != nil {
-			err = p.Send(client, util.FrameTypeResponse, response)
+			err = p.SendResponse(client, response, &byteBuf)
 			if err != nil {
 				log.Printf("send response to client error %s ", err)
 				break
@@ -105,7 +89,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 
 func (p *protocol) cleanupClientConn(client *client) {
 
-	p.context.broker.RemoveClient(client.ClientID) //, client.SubChannel)
+	p.context.broker.RemoveClient(client.ClientID) //, client.SubTopic)
 
 	client.stopper.Do(func() {
 		atomic.StoreInt32(&client.stopFlag, 1)
@@ -113,7 +97,7 @@ func (p *protocol) cleanupClientConn(client *client) {
 		client.Close()
 		model.DelClientConn(client.ClientID)
 
-		// if client.SubChannel != "" {
+		// if client.SubTopic != "" {
 		// }
 		// touch devie online
 		model.TouchDeviceOffline(client.ClientID)
@@ -121,113 +105,98 @@ func (p *protocol) cleanupClientConn(client *client) {
 	})
 }
 
-func (p *protocol) SendMessage(client *client, msg *Message, buf *bytes.Buffer) error {
+var bytesPub = []byte("PUB")
+
+func (p *protocol) SendMessage(client *client, msg *model.Message, buf *bytes.Buffer) error {
 	if p.context.broker.options.Verbose {
-		log.Printf("PROTOCOL: writing msg(%s) to client(%s) - %s",
-			msg.Id, client, msg.Body)
+		log.Printf("PROTOCOL: writing msg to client(%s) msg_id_%s - %s", client, msg.ID, msg.Body)
 	}
+
+	cmd := Pub(msg.ID, []byte(msg.Body))
 
 	buf.Reset()
-	err := msg.Write(buf)
+	err := cmd.Write(buf)
 	if err != nil {
 		return err
 	}
 
-	err = p.Send(client, util.FrameTypeMessage, buf.Bytes())
+	client.Lock()
+	client.SetWriteDeadline(time.Now().Add(time.Second))
+	_, err = client.Writer.Write(buf.Bytes())
 	if err != nil {
+		client.Unlock()
 		return err
 	}
-
-	// log.Printf("PROTOCOL: Success writing msg(%s) to client(%s) - %s", msg.Id, client, msg.Body)
-	return nil
+	client.Unlock()
+	return err
 }
 
-func (p *protocol) Send(client *client, frameType int32, data []byte) error {
+func (p *protocol) SendResponse(client *client, resp *Response, buf *bytes.Buffer) error {
 	// log.Printf("protol  send response %s", data)
+
+	buf.Reset()
+	err := resp.Write(buf)
+	if err != nil {
+		return err
+	}
+
 	client.Lock()
 
 	client.SetWriteDeadline(time.Now().Add(time.Second))
-	_, err := util.SendFramedResponse(client.Writer, frameType, data)
+	_, err = client.Writer.Write(buf.Bytes())
 	if err != nil {
 		client.Unlock()
 		return err
 	}
 
-	if frameType != util.FrameTypeMessage {
-		err = client.Flush()
-	}
-
+	err = client.Flush()
 	client.Unlock()
-
 	return err
 }
 
-func (p *protocol) Exec(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) Exec(client *client, cmd *Command) (*Response, error) {
 	switch {
-	case bytes.Equal(params[0], []byte("H")):
-		return p.HEARTBEAT(client, params)
-	// case bytes.Equal(params[0], []byte("PUB")):
-	// 	return p.PUB(client, params)
-	case bytes.Equal(params[0], []byte("NOP")):
-		return p.NOP(client, params)
-	case bytes.Equal(params[0], []byte("IDENTIFY")):
-		return p.IDENTIFY(client, params)
-	case bytes.Equal(params[0], []byte("SUB")):
-		return p.SUB(client, params)
-	case bytes.Equal(params[0], []byte("CLS")):
-		return p.CLS(client, params)
+	case bytes.Equal(cmd.Name, []byte("H")):
+		return p.HEARTBEAT(client, cmd)
+	case bytes.Equal(cmd.Name, []byte("CONN")):
+		return p.CONN(client, cmd)
+	case bytes.Equal(cmd.Name, []byte("SUB")):
+		return p.SUB(client, cmd)
+		// case bytes.Equal(params[0], []byte("PUB")):
+		// 	return p.PUB(client, params)
 	}
 
-	log.Printf("parse cmd (%s) error, line %s ", params[0], params)
-	return nil, util.NewFatalClientErr(nil, "E_INVALID", fmt.Sprintf("invalid command %s", params[0]))
+	log.Printf("parse cmd (%s) error, line %s ", client, cmd)
+	return nil, util.NewFatalClientErr(nil, "invalid_command", fmt.Sprintf("invalid command %s", cmd))
 }
 
-func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) CONN(client *client, cmd *Command) (*Response, error) {
 	var err error
 
 	if atomic.LoadInt32(&client.State) != StateInit {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot IDENTIFY in current state")
+		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CONN in current state")
 	}
 
-	bodyLen, err := readLen(client.Reader, client.lenSlice)
+	log.Printf("PROTOCOL: [%s] %s", client, cmd)
+
+	client_id, err := strconv.ParseInt(string(cmd.Params[0]), 10, 64)
 	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body size")
+		return nil, util.NewFatalClientErr(err, "invalid_client_id", "CONN "+err.Error())
 	}
+	client.ClientID = client_id
 
-	if int64(bodyLen) > p.context.broker.options.MaxBodySize {
-		return nil, util.NewFatalClientErr(nil, "E_BAD_BODY",
-			fmt.Sprintf("IDENTIFY body too big %d > %d", bodyLen, p.context.broker.options.MaxBodySize))
-	}
-
-	body := make([]byte, bodyLen)
-	_, err = io.ReadFull(client.Reader, body)
-	log.Printf("identify body %s", string(body))
+	heartbeat_interval, err := strconv.Atoi(string(cmd.Params[1]))
 	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to read body")
+		return nil, util.NewFatalClientErr(err, "invalid_heartbeat_interval", "CONN "+err.Error())
 	}
-
-	// body is a json structure with producer information
-	var identifyData identifyDataV2
-	err = json.Unmarshal(body, &identifyData)
-	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY failed to decode JSON body")
-	}
-
-	if p.context.broker.options.Verbose {
-		log.Printf("PROTOCOL: [%s] %+v", client, identifyData)
-	}
-
-	err = client.Identify(identifyData)
-	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "IDENTIFY "+err.Error())
-	}
+	client.SetHeartbeatInterval(heartbeat_interval)
 
 	// should send client connected eventsf
 	log.Printf("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
 	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
 	if err != nil {
 		log.Printf("setClientConn" + err.Error())
-		return nil, util.NewFatalClientErr(nil, "E_IDENTIFY_FAILED", "set client conn error")
+		return nil, util.NewFatalClientErr(nil, "conn_failed", "set client conn error")
 	}
 
 	p.context.broker.AddClient(client.ClientID, client)
@@ -236,10 +205,11 @@ func (p *protocol) IDENTIFY(client *client, params [][]byte) ([]byte, error) {
 	go p.checkOfflineMessage(client)
 	log.Printf("PROTOCOL: [%s] identify finish!", client)
 
-	return identifyOKBytes, nil
+	return RespConnAck, nil
 }
 
-func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) SUB(client *client, cmd *Command) (*Response, error) {
+
 	if atomic.LoadInt32(&client.State) != StateInit {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot SUB in current state")
 	}
@@ -248,46 +218,49 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot SUB with heartbeats disabled")
 	}
 
-	log.Printf("receive params on sub  %s", params)
-	if len(params) < 1 {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "SUB insufficient number of parameters")
+	log.Printf("receive params on sub  %s", cmd)
+	if len(cmd.Params) < 1 {
+		return nil, util.NewFatalClientErr(nil, "invalid_sub_command", "SUB insufficient number of parameters")
 	}
 
-	channel_id := string(params[1])
-	// if err != nil {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid channel id ")
-	// }
+	topic_id := string(cmd.Params[0])
+	if len(topic_id) == 0 {
+		return nil, util.NewFatalClientErr(nil, "invalid_topic_id", "invalid topic id ")
+	}
+
 	client_id := client.ClientID
 
-	// ok := model.CheckOrCreateChannel(channel_id)
+	// ok := model.CheckOrCreateChannel(topic_id)
 	// if ok == false {
-	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "create channel error")
+	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "create topic error")
 	// }
-	device, err := model.FindDeviceByID(client_id)
-	if err != nil || device == nil {
-		log.Printf("invalid client id [%d] err: %s", client_id, err)
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
-	}
+
+	// device, err := model.FindDeviceByID(client_id)
+	// if err != nil || device == nil {
+	// 	log.Printf("invalid client id [%d] err: %s", client_id, err)
+	// 	return nil, util.NewFatalClientErr(nil, "E_INVALID", "invalid client id ")
+	// }
 
 	//TODO send subscribe event
 	sub_id := <-p.context.broker.idChan
 	sub := &model.Subscribe{
-		ID:         sub_id,
-		ChannelID:  channel_id,
-		DeviceID:   client_id,
-		DeviceType: device.DeviceType,
-		CreatedAt:  time.Now().UnixNano(),
-		UpdatedAt:  time.Now().UnixNano(),
+		ID:        sub_id,
+		ChannelID: topic_id,
+		DeviceID:  client_id,
+		// DeviceType: device.DeviceType,
+		CreatedAt: time.Now().UnixNano(),
+		UpdatedAt: time.Now().UnixNano(),
 	}
-	err = model.SaveOrUpdateSubscribe(sub)
+
+	err := model.SaveOrUpdateSubscribe(sub)
 	if err != nil {
 		log.Printf("SaveOrUpdateSubscribe err  [%d] : %s", client_id, err)
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
-	log.Printf("clientId %d save sub channel %s ", client.ClientID, channel_id)
+	log.Printf("clientId %d save sub topic %s ", client.ClientID, topic_id)
 
-	// p.context.broker.AddClient(client.ClientID, channel_id, client)
-	// log.Printf("clientId %d sub channel %d success ", client.ClientID, channel_id)
+	// p.context.broker.AddClient(client.ClientID, topic_id, client)
+	// log.Printf("clientId %d sub topic %d success ", client.ClientID, topic_id)
 
 	// touch devie online
 	model.TouchDeviceOnline(client_id)
@@ -296,13 +269,13 @@ func (p *protocol) SUB(client *client, params [][]byte) ([]byte, error) {
 	// add client to channel sub list
 
 	atomic.StoreInt32(&client.State, StateSubscribed)
-	client.SubChannel = channel_id
+	client.SubTopic = topic_id
 
 	// client.Channel = channel
 	// update message pump
 	// client.SubEventChan <- channel
 
-	return subOkBytes, nil
+	return RespSubAck, nil
 }
 
 func (p *protocol) messagePump(client *client, startedChan chan bool) {
@@ -405,7 +378,7 @@ func (p *protocol) checkOfflineMessage(client *client) {
 		return
 	}
 
-	// subChannel := client.SubChannel
+	// subChannel := client.SubTopic
 	for _, messageID := range messageIDs {
 		message, err := model.FindMessageByID(messageID)
 		if err != nil || message == nil {
@@ -424,87 +397,52 @@ func (p *protocol) checkOfflineMessage(client *client) {
 		// 	continue
 		// }
 
-		msg := &Message{
-			Id:        util.Guid(message.ID).Hex(),
-			Body:      []byte(message.Body),
-			Timestamp: message.CreatedAt,
-		}
 		// log.Printf("output_offline_msg %d", client.ClientID)
 
-		client.clientMsgChan <- msg
+		client.clientMsgChan <- message
 		model.RemoveOfflineMessage(client.ClientID, messageID)
 	}
 }
 
 // hearbeat
-func (p *protocol) HEARTBEAT(client *client, params [][]byte) ([]byte, error) {
+func (p *protocol) HEARTBEAT(client *client, cmd *Command) (*Response, error) {
 	// log.Printf("[%s] heartbeat received", client)
-	return []byte("H"), nil
+	return RespHeartbeat, nil
 }
 
-func (p *protocol) CLS(client *client, params [][]byte) ([]byte, error) {
-	if atomic.LoadInt32(&client.State) != StateSubscribed {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CLS in current state")
+func (p *protocol) PUB(client *client, cmd *Command) (*Response, error) {
+
+	if len(cmd.Params) < 3 {
+		return nil, util.NewFatalClientErr(nil, "invalid_pub_command", "PUB insufficient number of parameters")
 	}
 
-	client.StartClose()
-	return []byte("CLOSE_WAIT"), nil
-}
-
-func (p *protocol) NOP(client *client, params [][]byte) ([]byte, error) {
-	return nil, nil
-}
-
-func (p *protocol) PUB(client *client, params [][]byte) ([]byte, error) {
-	// var err error
-	if client.Role != "$_@push_sign_$_kz_worker" {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID_REQUEST", "client can't pub message")
-	}
-
-	if len(params) < 3 {
-		return nil, util.NewFatalClientErr(nil, "E_INVALID", "PUB insufficient number of parameters")
-	}
 	// log.Printf("receive params on sub  %s", params)
-
-	bodyLen, err := readLen(client.Reader, client.lenSlice)
-	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "PUB failed to read body size")
+	topic_id := string(cmd.Params[0])
+	if len(topic_id) == 0 {
+		return nil, util.NewFatalClientErr(nil, "invalid_topic_id", "PUB insufficient number of parameters")
 	}
 
+	// msg_id := string(cmd.Params[1])
+	body := string(cmd.Params[2])
+	bodyLen := len(body)
 	if int64(bodyLen) > p.context.broker.options.MaxBodySize {
-		return nil, util.NewFatalClientErr(nil, "E_BAD_BODY",
-			fmt.Sprintf("PUB body too big %d > %d", bodyLen, p.context.broker.options.MaxBodySize))
+		return nil, util.NewFatalClientErr(nil, "pub_body_too_big", fmt.Sprintf("PUB body too big %d > %d", bodyLen, p.context.broker.options.MaxBodySize))
 	}
 
-	body := make([]byte, bodyLen)
-	_, err = io.ReadFull(client.Reader, body)
-	if err != nil {
-		return nil, util.NewFatalClientErr(err, "E_BAD_BODY", "PUB failed to read body")
+	if int64(bodyLen) <= 0 {
+		return nil, util.NewFatalClientErr(nil, "E_BAD_BODY", "PUB failed to read body")
 	}
 
 	// client_id, _ := strconv.ParseInt(string(params[1]), 10, 64)
-	// channel_id := string(params[2])
+	// topic_id := string(params[2])
 	// message_id, _ := strconv.ParseInt(string(params[3]), 10, 64)
 	// atomic.AddUint64(&p.context.broker.MessageCount, 1)
 
 	// p.context.broker.pubChan <- &PubMessage{clientID: client_id,
 	// 	messageID: message_id,
-	// 	channelID: channel_id,
+	// 	channelID: topic_id,
 	// 	pubClient: client,
 	// 	body:      body}
 	// log.Printf("receive params on sub  %s", params)
 	return nil, nil
-}
-
-// func AckPublish(ackType int32, clientID int64, msgID int64) []byte {
-// 	response := []byte(fmt.Sprintf("%d %d %d", ackType, clientID, msgID))
-// 	return response
-// }
-
-func readLen(r io.Reader, tmp []byte) (int32, error) {
-	_, err := io.ReadFull(r, tmp)
-	if err != nil {
-		return 0, err
-	}
-	return int32(binary.BigEndian.Uint32(tmp)), nil
 }

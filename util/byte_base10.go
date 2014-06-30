@@ -1,33 +1,31 @@
 package util
 
 import (
-	"errors"
 	"strconv"
 )
-
-func ByteToBase10(b []byte) (n uint64, err error) {
-	base := uint64(10)
-
-	n = 0
-	for i := 0; i < len(b); i++ {
-		var v byte
-		d := b[i]
-		switch {
-		case '0' <= d && d <= '9':
-			v = d - '0'
-		default:
-			n = 0
-			err = errors.New("failed to convert to Base10")
-			break
-		}
-		n *= base
-		n += uint64(v)
-	}
-
-	return n, err
-}
 
 func IntToBytes(i int) (bytes []byte, err error) {
 	bytes = []byte(strconv.Itoa(i))
 	return bytes, err
+}
+
+func Int64ToBytes(i int64) (bytes []byte, err error) {
+	bytes = []byte(strconv.FormatInt(i, 10))
+	return bytes, err
+}
+
+func ByteToInt(b []byte) (n int, err error) {
+	m, err := strconv.Atoi(string(b))
+	if err != nil {
+		return 0, err
+	}
+	return int(m), err
+}
+
+func ByteToInt64(b []byte) (n int64, err error) {
+	n, err = strconv.ParseInt(string(b), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return n, err
 }
