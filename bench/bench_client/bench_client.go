@@ -10,14 +10,15 @@ import (
 	"syscall"
 	"time"
 
-	"code.sohuno.com/kzapp/push-server/client"
+	client "code.sohuno.com/kzapp/push-server/client"
 )
 
 var (
-	flagSet        = flag.NewFlagSet("client", flag.ExitOnError)
-	apiHttpAddress = flagSet.String("api-http-address", "0.0.0.0:8501", "<addr>:<port> to listen on for HTTP clients")
-	subChannel     = flagSet.String("sub-channel", "11111", "client sub channel id")
-	clientCount    = flagSet.Int("client-count", 50000, "nums of client start")
+	flagSet          = flag.NewFlagSet("client", flag.ExitOnError)
+	apiHttpAddress   = flagSet.String("api-http-address", "0.0.0.0:8501", "<addr>:<port> to listen on for HTTP clients")
+	brokerTcpAddress = flagSet.String("broker-tcp-address", "0.0.0.0:8600", "<addr>:<port> to listen on for HTTP clients")
+	subChannel       = flagSet.String("sub-channel", "28001", "client sub channel id")
+	clientCount      = flagSet.Int64("client-count", 50000, "nums of client start")
 )
 
 func main() {
@@ -27,8 +28,8 @@ func main() {
 	fmt.Println("client start!")
 
 	clientChan := make(chan *client.Client, *clientCount)
-	for i := 0; i < *clientCount; i++ {
-		go createClient(clientChan)
+	for i := int64(0); i < *clientCount; i++ {
+		go createClient(clientChan, i)
 		log.Printf("start client  %d\n", i)
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -49,8 +50,11 @@ func main() {
 	}
 }
 
-func createClient(clientChan chan *client.Client) {
+func createClient(clientChan chan *client.Client, clientID int64) {
 	c := client.NewClient()
-	c.AutoPump(*apiHttpAddress, *subChannel, "")
+	c.ID = clientID
+	c.BrokerAddr = *brokerTcpAddress
+	c.SubChannel = *subChannel
+	c.ConnectWithRetry()
 	clientChan <- c
 }

@@ -24,7 +24,7 @@ const DefaultBufferSize = 512
 // when Publish commands are executed.
 type Client struct {
 	ID         int64
-	brokerAddr string
+	BrokerAddr string
 	SubChannel string
 
 	net.Conn
@@ -120,7 +120,7 @@ func (c *Client) Register(addr string, serial_no string) error {
 	device_id := int64(data.Get("device_id").MustInt())
 	broker_addr := string(data.Get("broker").MustString())
 	c.ID = device_id
-	c.brokerAddr = broker_addr
+	c.BrokerAddr = broker_addr
 	return nil
 }
 
@@ -133,15 +133,15 @@ func (c *Client) ConnectWithRetry() {
 
 			err := c.Connect()
 			if err == nil {
-				log.Printf("connect to %s success ", c.brokerAddr)
+				log.Printf("connect to %s success ", c.BrokerAddr)
 				break
 			}
 
 			if err != nil {
-				log.Printf("<%s> ERROR: failed to connect to %s - %s", c, c.brokerAddr, err.Error())
+				log.Printf("<%s> ERROR: failed to connect to %s - %s", c, c.BrokerAddr, err.Error())
 			}
 
-			log.Printf("<%s>  re-connecting [%s] in 15 seconds...", c, c.brokerAddr)
+			log.Printf("<%s>  re-connecting [%s] in 15 seconds...", c, c.BrokerAddr)
 			time.Sleep(15 * time.Second)
 		}
 
@@ -160,10 +160,10 @@ func (c *Client) Connect() error {
 		return ErrNotConnected
 	}
 
-	log.Printf("[%s] connecting to %s .....", c, c.brokerAddr)
-	conn, err := net.DialTimeout("tcp", c.brokerAddr, time.Second*5)
+	log.Printf("[%s] connecting to %s .....", c, c.BrokerAddr)
+	conn, err := net.DialTimeout("tcp", c.BrokerAddr, time.Second*5)
 	if err != nil {
-		log.Printf("[%s] failed to dial %s - %s", c, c.brokerAddr, err)
+		log.Printf("[%s] failed to dial %s - %s", c, c.BrokerAddr, err)
 		atomic.StoreInt32(&c.state, StateInit)
 		return err
 	}
@@ -331,7 +331,7 @@ func handleError(c *Client, errMsg string) {
 	atomic.StoreInt32(&c.stopFlag, 1)
 
 	go func() {
-		log.Printf("[%s] re-connecting in 15 seconds...", c.brokerAddr)
+		log.Printf("[%s] re-connecting in 15 seconds...", c.BrokerAddr)
 		time.Sleep(15 * time.Second)
 
 		atomic.StoreInt32(&c.stopFlag, 0)

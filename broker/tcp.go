@@ -1,11 +1,10 @@
 package main
 
 import (
+	"code.sohuno.com/kzapp/push-server/util"
 	"io"
 	"log"
 	"net"
-
-	"code.sohuno.com/kzapp/push-server/util"
 )
 
 type tcpServer struct {
@@ -36,7 +35,8 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 	case "  V1":
 		prot = &protocol{context: p.context}
 	default:
-		util.SendFramedResponse(clientConn, util.FrameTypeError, []byte("E_BAD_PROTOCOL"))
+		errResponse := &Response{false, []byte("E_BAD_PROTOCOL")}
+		SendResponse(clientConn, errResponse)
 		clientConn.Close()
 		log.Printf("client(%s) bad protocol magic '%s'", clientConn.RemoteAddr(), protocolMagic)
 		return
@@ -47,4 +47,12 @@ func (p *tcpServer) Handle(clientConn net.Conn) {
 		log.Printf("client(%s) - %s", clientConn.RemoteAddr(), err.Error())
 		return
 	}
+}
+
+func SendResponse(w io.Writer, resp *Response) error {
+	err := resp.Write(w)
+	if err != nil {
+		return err
+	}
+	return err
 }
