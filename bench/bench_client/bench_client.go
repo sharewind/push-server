@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-	"time"
+	// "time"
 
 	client "code.sohuno.com/kzapp/push-server/client"
 )
@@ -19,6 +19,7 @@ var (
 	brokerTcpAddress = flagSet.String("broker-tcp-address", "0.0.0.0:8600", "<addr>:<port> to listen on for HTTP clients")
 	subChannel       = flagSet.String("sub-channel", "28001", "client sub channel id")
 	clientCount      = flagSet.Int64("client-count", 50000, "nums of client start")
+	startID          = flagSet.Int64("start-id", 1, "client start id")
 )
 
 func main() {
@@ -28,10 +29,11 @@ func main() {
 	fmt.Println("client start!")
 
 	clientChan := make(chan *client.Client, *clientCount)
-	for i := int64(0); i < *clientCount; i++ {
+	endID := *startID + *clientCount
+	for i := *startID; i <= endID; i++ {
 		go createClient(clientChan, i)
 		log.Printf("start client  %d\n", i)
-		time.Sleep(5 * time.Millisecond)
+		// time.Sleep(5 * time.Millisecond)
 	}
 
 	exitChan := make(chan int)

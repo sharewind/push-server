@@ -49,7 +49,7 @@ func (p *protocol) IOLoop(conn net.Conn) error {
 		}
 
 		// if p.context.broker.options.Verbose {
-		log.Printf("PROTOCOL(V1): [%d] %s", client.ClientID, cmd)
+		// log.Printf("PROTOCOL(V1): [%d] %s", client.ClientID, cmd)
 		// }
 
 		response, err := p.Exec(client, cmd)
@@ -109,7 +109,7 @@ var bytesPub = []byte("PUB")
 
 func (p *protocol) SendMessage(client *client, msg *model.Message, buf *bytes.Buffer) error {
 	if p.context.broker.options.Verbose {
-		log.Printf("PROTOCOL: writing msg to client(%s) msg_id_%s - %s", client, msg.ID, msg.Body)
+		// log.Printf("PROTOCOL: writing msg to client(%s) msg_id_%s - %s", client, msg.ID, msg.Body)
 	}
 
 	cmd := Pub(msg.ID, []byte(msg.Body))
@@ -177,7 +177,7 @@ func (p *protocol) CONN(client *client, cmd *Command) (*Response, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot CONN in current state")
 	}
 
-	log.Printf("PROTOCOL: [%s] %s", client, cmd)
+	// log.Printf("PROTOCOL: [%s] %s", client, cmd)
 
 	client_id, err := strconv.ParseInt(string(cmd.Params[0]), 10, 64)
 	if err != nil {
@@ -200,10 +200,10 @@ func (p *protocol) CONN(client *client, cmd *Command) (*Response, error) {
 	}
 
 	p.context.broker.AddClient(client.ClientID, client)
-	log.Printf("clientId %d conn success ", client.ClientID)
+	// log.Printf("clientId %d conn success ", client.ClientID)
 
-	go p.checkOfflineMessage(client)
-	log.Printf("PROTOCOL: [%s] identify finish!", client)
+	// go p.checkOfflineMessage(client)
+	// log.Printf("PROTOCOL: [%s] identify finish!", client)
 
 	return RespConnAck, nil
 }
@@ -218,7 +218,7 @@ func (p *protocol) SUB(client *client, cmd *Command) (*Response, error) {
 		return nil, util.NewFatalClientErr(nil, "E_INVALID", "cannot SUB with heartbeats disabled")
 	}
 
-	log.Printf("receive params on sub  %s", cmd)
+	// log.Printf("receive params on sub  %s", cmd)
 	if len(cmd.Params) < 1 {
 		return nil, util.NewFatalClientErr(nil, "invalid_sub_command", "SUB insufficient number of parameters")
 	}
@@ -257,7 +257,7 @@ func (p *protocol) SUB(client *client, cmd *Command) (*Response, error) {
 		log.Printf("SaveOrUpdateSubscribe err  [%d] : %s", client_id, err)
 		return nil, util.NewFatalClientErr(nil, "internal error", "save subscribe error")
 	}
-	log.Printf("clientId %d save sub topic %s ", client.ClientID, topic_id)
+	// log.Printf("clientId %d save sub topic %s ", client.ClientID, topic_id)
 
 	// p.context.broker.AddClient(client.ClientID, topic_id, client)
 	// log.Printf("clientId %d sub topic %d success ", client.ClientID, topic_id)

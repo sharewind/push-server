@@ -217,7 +217,7 @@ func (b *Broker) AddClient(clientID int64, client *client) {
 	key := clientID //fmt.Sprintf("%d_%s", clientID, channelID)
 	_, ok := b.clients[key]
 	if ok {
-		log.Printf("Warn!! client exist and return [%s] = %s", key, client)
+		log.Printf("Warn!! client exist and return [%d] = %s", key, client)
 	}
 	b.clients[key] = client
 	// log.Printf("put client[%d] = %s", key, client)

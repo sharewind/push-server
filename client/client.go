@@ -189,7 +189,7 @@ func (c *Client) Connect() error {
 
 	c.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	cmd.Write(&buf)
-	log.Printf("[%s] conn bytes %s", c, buf.Bytes())
+	// log.Printf("[%s] conn bytes %s", c, buf.Bytes())
 
 	_, err = c.Conn.Write(buf.Bytes())
 	if err != nil {

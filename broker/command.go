@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
+	// "log"
 
 	"code.sohuno.com/kzapp/push-server/util"
 )
@@ -96,18 +96,18 @@ func (c *Command) Write(w io.Writer) error {
 }
 
 func ParseCommand(reader *bufio.Reader) (*Command, error) {
-	log.Printf("parseCommand ....")
+	// log.Printf("parseCommand ....")
 
 	var params [][]byte
 	cmdName, _, err := reader.ReadLine()
-	log.Printf("%s", cmdName)
+	// log.Printf("%s", cmdName)
 	cmdName = []byte(string(cmdName))
 	if err != nil {
 		return nil, err
 	}
 
 	len_bytes, _, err := reader.ReadLine()
-	log.Printf("%s", len_bytes)
+	// log.Printf("%s", len_bytes)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func ParseCommand(reader *bufio.Reader) (*Command, error) {
 		return &Command{cmdName, params}, nil
 	}
 
-	log.Printf("len byte %s", len_bytes[1:])
+	// log.Printf("len byte %s", len_bytes[1:])
 	param_len, err := util.ByteToInt(len_bytes[1:])
 	if err != nil {
 		return nil, err
@@ -125,12 +125,12 @@ func ParseCommand(reader *bufio.Reader) (*Command, error) {
 
 	params = make([][]byte, param_len)
 	for i := 0; i < int(param_len); i++ {
-		log.Printf("berfore  cmdName=%s, params=%s", cmdName, params)
+		// log.Printf("berfore  cmdName=%s, params=%s", cmdName, params)
 
 		len_bytes, _, err := reader.ReadLine()
-		log.Printf("param val len = %s", len_bytes)
+		// log.Printf("param val len = %s", len_bytes)
 
-		log.Printf("cmdName=%s, params=%s", cmdName, params)
+		// log.Printf("cmdName=%s, params=%s", cmdName, params)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +143,7 @@ func ParseCommand(reader *bufio.Reader) (*Command, error) {
 
 		params[i] = make([]byte, val_len)
 		n, err := io.ReadAtLeast(reader, params[i], int(val_len))
-		log.Printf("param val = %s", params[i])
+		// log.Printf("param val = %s", params[i])
 
 		if err != nil || n != int(val_len) {
 			return nil, err
@@ -156,7 +156,7 @@ func ParseCommand(reader *bufio.Reader) (*Command, error) {
 
 	}
 
-	log.Printf("cmdName=%s, params=%s", cmdName, params)
+	// log.Printf("cmdName=%s, params=%s", cmdName, params)
 	return &Command{cmdName, params}, nil
 }
 
