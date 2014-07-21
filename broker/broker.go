@@ -232,7 +232,7 @@ func (b *Broker) RemoveClient(clientID int64) {
 	key := clientID //fmt.Sprintf("%d_%s", clientID, channelID)
 	_, ok := b.clients[key]
 	if !ok {
-		log.Printf("client not exist and return [%d]", key)
+		// log.Printf("client not exist and return [%d]", key)
 		return
 	}
 	delete(b.clients, key)
@@ -333,7 +333,7 @@ func (w *Broker) PutMessage(msg *model.Message) error {
 	// atomic.AddUint64(&w.MessageCount, 1)
 
 	// atomic.AddUint64(&w.PubCount, 1)
-	log.Printf("[worker]<PutMessage> %#v", msg)
+	// log.Printf("[worker]<PutMessage> %#v", msg)
 	return nil
 }
 
@@ -367,9 +367,9 @@ func (w *Broker) produceMessages(message *model.Message) {
 			w.clientPubChan <- &PubMessage{<-w.idChan, sub.DeviceID, message}
 			lastID = sub.ID
 		}
-		log.Printf("get subs page %d  count %d  lastID %d finished!", i, len(subs), lastID)
+		// log.Printf("get subs page %d  count %d  lastID %d finished!", i, len(subs), lastID)
 	}
-	log.Printf("get subs_all finished!.........")
+	// log.Printf("get subs_all finished!.........")
 }
 
 // func (w *Broker) processAck(ack *model.AckMessage) {

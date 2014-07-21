@@ -15,8 +15,10 @@ import (
 const DefaultBufferSize = 512
 
 type client struct {
-	sync.RWMutex
+	ClientID int64
+	SubTopic string
 
+	sync.RWMutex
 	context *context
 
 	// original connection
@@ -26,12 +28,11 @@ type client struct {
 	Reader *bufio.Reader
 	Writer *bufio.Writer
 
-	OutputBufferSize    int
-	OutputBufferTimeout time.Duration
+	// OutputBufferSize    int
+	// OutputBufferTimeout time.Duration
 
 	HeartbeatInterval time.Duration
-
-	MsgTimeout time.Duration
+	// MsgTimeout time.Duration
 
 	State       int32
 	ConnectTime time.Time
@@ -40,15 +41,12 @@ type client struct {
 	stopFlag int32
 	stopper  sync.Once
 
-	ClientID int64
-	SubTopic string
-
 	clientMsgChan chan *model.Message
 	responseChan  chan *Response
 
 	// re-usable buffer for reading the 4-byte lengths off the wire
-	lenBuf   [4]byte
-	lenSlice []byte
+	// lenBuf   [4]byte
+	// lenSlice []byte
 }
 
 func newClient(conn net.Conn, context *context) *client {
@@ -61,8 +59,8 @@ func newClient(conn net.Conn, context *context) *client {
 		Reader: bufio.NewReaderSize(conn, DefaultBufferSize),
 		Writer: bufio.NewWriterSize(conn, DefaultBufferSize),
 
-		OutputBufferSize:    DefaultBufferSize,
-		OutputBufferTimeout: 250 * time.Millisecond,
+		// OutputBufferSize:    DefaultBufferSize,
+		// OutputBufferTimeout: 250 * time.Millisecond,
 
 		// ReadyStateChan has a buffer of 1 to guarantee that in the event
 		// there is a race the state update is not lost
@@ -74,7 +72,7 @@ func newClient(conn net.Conn, context *context) *client {
 		// heartbeats are client configurable but default to 30s
 		HeartbeatInterval: context.broker.options.ClientTimeout / 2,
 	}
-	c.lenSlice = c.lenBuf[:]
+	// c.lenSlice = c.lenBuf[:]
 	return c
 }
 

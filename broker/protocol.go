@@ -105,8 +105,6 @@ func (p *protocol) cleanupClientConn(client *client) {
 	})
 }
 
-var bytesPub = []byte("PUB")
-
 func (p *protocol) SendMessage(client *client, msg *model.Message, buf *bytes.Buffer) error {
 	if p.context.broker.options.Verbose {
 		// log.Printf("PROTOCOL: writing msg to client(%s) msg_id_%s - %s", client, msg.ID, msg.Body)
@@ -192,10 +190,10 @@ func (p *protocol) CONN(client *client, cmd *Command) (*Response, error) {
 	client.SetHeartbeatInterval(heartbeat_interval)
 
 	// should send client connected eventsf
-	log.Printf("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
+	// log.Printf("SetClientConn clientID=%d, broker_addr=%s", client.ClientID, p.context.broker.options.BroadcastAddress)
 	err = model.SetClientConn(client.ClientID, p.context.broker.options.BroadcastAddress)
 	if err != nil {
-		log.Printf("setClientConn" + err.Error())
+		log.Printf("setClientConn error %s", err.Error())
 		return nil, util.NewFatalClientErr(nil, "conn_failed", "set client conn error")
 	}
 
